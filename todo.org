@@ -1,0 +1,33 @@
+* Create rigidbody tab in Scotty3D menu using ImGUI
+- Figure out how to register tab.
+- Add a "simulate" button.
+- Figure out how to get all meshes in the scene.
+
+* Single-threaded simulation
+** Create rigid body class.
+- Constructor to build from model/mesh?
+- Two main variables. Position and quaternion.
+- Should contain inertia tensor matrix, velocity vector, angular velocity vector, ...
+- Contains some origin point. Should it be the center of mass? (probably not)
+- Contains a group of particles representing its collision mesh.
+
+** Create particle class.
+- Add all physical properties.
+- Have some notion of location with regards to owning rigid body origin.
+
+** Grid of particles
+- 4D grid, where 3 dimensions are for space and 4th for storing particles in the same location.
+- Make 4th dimension adjustable.
+- Side length of a voxel = diameter of particle. Perhaps we want to enforce uniform particle sizes across a simulation? (for sure)
+
+** Simulation step
+- Take all rigid bodies in the scene and update all their particles:
+  + Particle position
+  + Particle velocity
+  + Particle relative position to center of mass.
+- Create grid and store all particles. Should we just update grid or should we create a new one every time? What are the merits of each approach?
+- Over all pairs of colliding particles, calculate particle forces:
+  + Repulsive force
+  + Damping force
+  + Shear force
+- Aggregate over all forces to compute linear and angular momenta of rigid body.
