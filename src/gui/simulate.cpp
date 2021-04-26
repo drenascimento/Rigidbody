@@ -28,6 +28,9 @@ void Simulate::step(Scene& scene, float dt) {
         if(item.is<Scene_Particles>()) {
             item.get<Scene_Particles>().step(scene_bvh, dt);
         }
+        if(item.is<Rigidbody>()) {
+            item.get<Rigidbody>().step(dt);
+        }
     });
 }
 

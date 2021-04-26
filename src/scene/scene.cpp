@@ -32,6 +32,10 @@ Scene_Item::Scene_Item(Scene_Light&& light) : data(std::move(light)) {
 Scene_Item::Scene_Item(Scene_Particles&& particles) : data(std::move(particles)) {
 }
 
+// TODO: What even is this?
+Scene_Item::Scene_Item(Scene_Rigidbody&& rigidbody) : data(std::move(rigidbody)) {
+}
+
 Scene_Item::Scene_Item(Scene_Item&& src) : data(std::move(src.data)) {
 }
 
@@ -48,11 +52,13 @@ BBox Scene_Item::bbox() {
     return std::visit([](auto& obj) { return obj.bbox(); }, data);
 }
 
+// NOTE: Check this works
 void Scene_Item::render(const Mat4& view, bool solid, bool depth_only, bool posed) {
     std::visit(
         overloaded{[&](Scene_Object& obj) { obj.render(view, solid, depth_only, posed); },
                    [&](Scene_Light& light) { light.render(view, depth_only, posed); },
-                   [&](Scene_Particles& particles) { particles.render(view, depth_only, posed); }},
+                   [&](Scene_Particles& particles) { particles.render(view, depth_only, posed); },
+                   [&](Scene_Rigidbody& rigidbody) { rigidbody.render(view, depth_only, posed); }},
         data);
 }
 
@@ -60,6 +66,7 @@ Scene_ID Scene_Item::id() const {
     return std::visit([](auto& obj) { return obj.id(); }, data);
 }
 
+// NOTE: Do anything here????
 Anim_Pose& Scene_Item::animation() {
 
     Scene_Object* o = std::get_if<Scene_Object>(&data);
@@ -68,6 +75,8 @@ Anim_Pose& Scene_Item::animation() {
     if(l) return l->anim;
     Scene_Particles* p = std::get_if<Scene_Particles>(&data);
     if(p) return p->anim;
+    Scene_Rigidbody* r = std::get_if<Scene_Rigidbody>(&data);
+    if(r) return r->anim;
 
     assert(false);
     return l->anim;
@@ -81,6 +90,8 @@ const Anim_Pose& Scene_Item::animation() const {
     if(l) return l->anim;
     const Scene_Particles* p = std::get_if<Scene_Particles>(&data);
     if(p) return p->anim;
+    const Scene_Rigidbody* r = std::get_if<Scene_Rigidbody>(&data);
+    if(r) return r->anim;
 
     assert(false);
     return l->anim;
@@ -94,6 +105,8 @@ Pose& Scene_Item::pose() {
     if(l) return l->pose;
     Scene_Particles* p = std::get_if<Scene_Particles>(&data);
     if(p) return p->pose;
+    Scene_Rigidbody* r = std::get_if<Scene_Rigidbody>(&data);
+    if(r) return r->pose;
 
     assert(false);
     return l->pose;
@@ -107,6 +120,8 @@ const Pose& Scene_Item::pose() const {
     if(l) return l->pose;
     const Scene_Particles* p = std::get_if<Scene_Particles>(&data);
     if(p) return p->pose;
+    const Scene_Rigidbody* r = std::get_if<Scene_Rigidbody>(&data);
+    if(r) return r->pose;
 
     assert(false);
     return l->pose;
@@ -120,6 +135,8 @@ std::pair<char*, int> Scene_Item::name() {
     if(l) return {l->opt.name, Scene_Light::max_name_len};
     Scene_Particles* p = std::get_if<Scene_Particles>(&data);
     if(p) return {p->opt.name, Scene_Particles::max_name_len};
+    Scene_Rigidbody* r = std::get_if<Scene_Rigidbody>(&data);
+    if(r) return {r->opt.name, Scene_Rigidbody::max_name_len};
 
     assert(false);
     return {l->opt.name, Scene_Object::max_name_len};
@@ -133,6 +150,8 @@ std::string Scene_Item::name() const {
     if(l) return std::string(l->opt.name);
     const Scene_Particles* p = std::get_if<Scene_Particles>(&data);
     if(p) return std::string(p->opt.name);
+    const Scene_Rigidbody* r = std::get_if<Scene_Rigidbody>(&data);
+    if(r) return std::string(r->opt.name);
 
     assert(false);
     return std::string(l->opt.name);
@@ -215,6 +234,13 @@ Scene_ID Scene::add(Scene_Particles&& obj) {
     return obj.id();
 }
 
+// NOTE: Do we want this?
+Scene_ID Scene::add(Scene_Rigidbody&& obj) {
+    assert(objs.find(obj.id()) == objs.end());
+    objs.emplace(std::make_pair(obj.id(), std::move(obj)));
+    return obj.id();
+}
+
 void Scene::restore(Scene_ID id) {
     if(objs.find(id) != objs.end()) return;
     assert(erased.find(id) != erased.end());
@@ -275,6 +301,14 @@ Scene_Particles& Scene::get_particles(Scene_ID id) {
     assert(entry != objs.end());
     assert(entry->second.is<Scene_Particles>());
     return entry->second.get<Scene_Particles>();
+}
+
+// NOTE: If we don't actually use this, delete it
+Scene_Rigidbody& Scene::get_rigidbody(Scene_ID id) {
+    auto entry = objs.find(id);
+    assert(entry != objs.end());
+    assert(entry->second.is<Scene_Rigidbody>());
+    return entry->second.get<Scene_Rigidbody>();
 }
 
 void Scene::clear(Undo& undo) {
@@ -1271,6 +1305,12 @@ Scene::Stats Scene::get_stats(const Gui::Animate& animation) {
             if(particles.panim.splines.any()) {
                 s.anims++;
             }
+
+        // NOTE: Do we want this here?
+        } else if(item.is<Scene_Rigidbody>()) {
+
+            s.meshes++;
+            s.nodes++;
         }
     });
 

@@ -13,6 +13,7 @@
 #include "light.h"
 #include "object.h"
 #include "particles.h"
+#include "rigidbody.h"
 
 class Undo;
 class Halfedge_Editor;
@@ -27,6 +28,7 @@ public:
     Scene_Item(Scene_Object&& obj);
     Scene_Item(Scene_Light&& light);
     Scene_Item(Scene_Particles&& particles);
+    Scene_Item(Scene_Rigidbody&& rigidbody); // TODO: Implement
 
     Scene_Item(Scene_Item&& src);
     Scene_Item(const Scene_Item& src) = delete;
@@ -58,7 +60,7 @@ public:
     }
 
 private:
-    std::variant<Scene_Object, Scene_Light, Scene_Particles> data;
+    std::variant<Scene_Object, Scene_Light, Scene_Particles, Scene_Rigidbody> data; // TODO: Check where data is used
 };
 
 using Scene_Maybe = std::optional<std::reference_wrapper<Scene_Item>>;
@@ -88,6 +90,7 @@ public:
     Scene_ID add(Scene_Object&& obj);
     Scene_ID add(Scene_Light&& obj);
     Scene_ID add(Scene_Particles&& obj);
+    Scene_ID add(Scene_Rigidbody&& rigidbody); // TODO: Implement
     Scene_ID add(Pose pose, GL::Mesh&& mesh, std::string n = {}, Scene_ID id = 0);
     Scene_ID add(Pose pose, Halfedge_Mesh&& mesh, std::string n = {}, Scene_ID id = 0);
     Scene_ID reserve_id();
@@ -103,6 +106,7 @@ public:
     Scene_Object& get_obj(Scene_ID id);
     Scene_Light& get_light(Scene_ID id);
     Scene_Particles& get_particles(Scene_ID id);
+    Scene_Rigidbody& get_rigidbody(Scene_ID id); // TODO: Implement
     std::string set_env_map(std::string file);
 
     bool has_env_light() const;
