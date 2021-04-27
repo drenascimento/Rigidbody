@@ -31,3 +31,7 @@
   + Damping force
   + Shear force
 - Aggregate over all forces to compute linear and angular momenta of rigid body.
+
+
+* Tasks
+- Import ~Scene_Rigidbody~ into scene.

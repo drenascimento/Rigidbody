@@ -2,15 +2,17 @@
 
 #include "rigidbody.h"
 #include "../lib/mathlib.h"
+#include "../platform/gl.h"
 
 #include <algorithm>
 #include <cmath>
 
-Scene_Rigidbody::Scene_Rigidbody(Scene_ID id) {
-    _id = id;
-    // TODO: Initialize Mesh
-    // TODO: Initialize Particles
-    snprintf(opt.name, max_name_len, "Emitter %d", id);
+Rigidbody::Rigidbody(GL::Mesh mesh) {
+    _mesh = mesh;
 }
 
-// TODO: Implement rest of the methods.
+
+
+GL::Mesh Rigidbody::mesh() {
+    return _mesh;
+}
