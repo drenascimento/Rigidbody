@@ -32,7 +32,6 @@ Scene_Item::Scene_Item(Scene_Light&& light) : data(std::move(light)) {
 Scene_Item::Scene_Item(Scene_Particles&& particles) : data(std::move(particles)) {
 }
 
-// TODO: What even is this?
 Scene_Item::Scene_Item(Scene_Rigidbody&& rigidbody) : data(std::move(rigidbody)) {
 }
 

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <vector>
 #include "../lib/mathlib.h"
 #include "../platform/gl.h"
@@ -14,13 +16,20 @@ struct Rigidbody_Particle {
 
 class Rigidbody {
 public:
-  Rigidbody(GL::Mesh mesh);
+  Rigidbody(GL::Mesh&& mesh);
+  Rigidbody(Rigidbody&& src) = default;
+  Rigidbody(const Rigidbody& src) = delete;
   ~Rigidbody() = default;
 
-  GL::Mesh mesh();
+  GL::Mesh& mesh();
   const std::vector<Rigidbody_Particle>& particles() const;
+
+  Pose pose;
+
+  void operator=(const Rigidbody& src) = delete;
+  Rigidbody& operator=(Rigidbody&& src) = default;
 private:
-  const GL::Mesh _mesh;
+  GL::Mesh body;
   std::vector<Rigidbody_Particle> _particles;
 
   /* Never updated. */
