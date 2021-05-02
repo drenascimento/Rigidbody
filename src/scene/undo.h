@@ -68,6 +68,7 @@ public:
 
     void add_light(Scene_Light&& mesh);
     void add_particles(Scene_Particles&& particles);
+    void add_rigidbody(Scene_Rigidbody&& rigidbody);
     Scene_Object& add_obj(GL::Mesh&& mesh, std::string name);
     Scene_Object& add_obj(Halfedge_Mesh&& mesh, std::string name);
 

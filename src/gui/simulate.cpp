@@ -5,6 +5,8 @@
 #include "manager.h"
 #include "simulate.h"
 
+#include <iostream>
+
 namespace Gui {
 
 const char* Solid_Type_Names[(int)Solid_Type::count] = {"Sphere", "Cube", "Cylinder", "Torus",
@@ -56,6 +58,12 @@ void Simulate::update(Scene& scene, Undo& undo) {
             Scene_Particles& particles = item.get<Scene_Particles>();
             if(particles.opt.enabled) {
                 particles.step(scene_bvh, dt);
+            }
+        }
+        if(item.is<Scene_Rigidbody>()) {
+            Scene_Rigidbody& rigidbody = item.get<Scene_Rigidbody>();
+            if (rigidbody.opt.enabled) {
+                rigidbody.step(dt);
             }
         }
     });
@@ -231,8 +239,26 @@ Mode Simulate::UIsidebar(Manager& manager, Scene& scene, Undo& undo, Widgets& wi
             GL::Mesh mesh = Util::cube_mesh(1.0f);
             Scene_Rigidbody scene_r = Scene_Rigidbody(scene.reserve_id());
             scene_r.addRigidbody(Rigidbody(std::move(mesh)));
-            scene.add(std::move(scene_r));
+            undo.add_rigidbody(std::move(scene_r));
         }
+        if(ImGui::Button("Start")) {
+            scene.for_items([](Scene_Item& item) {
+                if (item.is<Scene_Rigidbody>()) {
+                    Scene_Rigidbody& rigidbody = item.get<Scene_Rigidbody>();
+                    rigidbody.opt.enabled = true;
+                }
+            });
+        }
+        if(ImGui::Button("Stop")) {
+            scene.for_items([](Scene_Item& item) {
+                if (item.is<Scene_Rigidbody>()) {
+                    Scene_Rigidbody& rigidbody = item.get<Scene_Rigidbody>();
+                    rigidbody.opt.enabled = false;
+                }
+            });
+        }
+
+
         ImGui::PopID();
     }
 

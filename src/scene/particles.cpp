@@ -6,6 +6,8 @@
 #include "particles.h"
 #include "renderer.h"
 
+#include <iostream>
+
 Scene_Particles::Scene_Particles(Scene_ID id)
     : arrow(Util::arrow_mesh(0.03f, 0.075f, 1.0f)), particle_instances(Util::sphere_mesh(1.0f, 1)) {
 
@@ -98,6 +100,8 @@ const std::vector<Particle>& Scene_Particles::get_particles() const {
 }
 
 void Scene_Particles::step(const PT::BVH<PT::Object>& scene, float dt) {
+
+    std::cout << "Step called on particles\n";
 
     if(!opt.enabled) {
         clear();

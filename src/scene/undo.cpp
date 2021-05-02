@@ -247,6 +247,16 @@ void Undo::add_particles(Scene_Particles&& particles) {
            });
 }
 
+void Undo::add_rigidbody(Scene_Rigidbody&& rigidbody) {
+    Scene_ID id = scene.add(std::move(rigidbody));
+    scene.restore(id);
+    action([id, this]() { scene.restore(id); },
+           [id, this]() {
+               scene.erase(id);
+               gui.invalidate_obj(id);
+           });
+}
+
 void Undo::add_light(Scene_Light&& light) {
     Scene_ID id = scene.add(std::move(light));
     scene.restore(id);
