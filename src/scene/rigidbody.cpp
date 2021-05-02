@@ -5,10 +5,11 @@
 #include <algorithm>
 #include <cmath>
 
-Rigidbody::Rigidbody(GL::Mesh&& mesh) : body(std::move(mesh)) {
+
+Rigidbody::Rigidbody(Scene_Object&& obj) : body(std::move(obj)) {
     // TODO: Initialize pose here, or perhaps just modify it in update
 }
 
-GL::Mesh& Rigidbody::mesh() {
+Scene_Object& Rigidbody::obj() {
     return body;
 }

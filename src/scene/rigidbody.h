@@ -1,11 +1,10 @@
-#pragma once
-
 #include <vector>
 #include "../lib/mathlib.h"
 #include "../platform/gl.h"
 
 #include "object.h"
 #include "pose.h"
+
 
 struct Rigidbody_Particle {
         Vec3 pos;
@@ -16,20 +15,19 @@ struct Rigidbody_Particle {
 
 class Rigidbody {
 public:
-  Rigidbody(GL::Mesh&& mesh);
+  Rigidbody(Scene_Object&& obj);
   Rigidbody(Rigidbody&& src) = default;
   Rigidbody(const Rigidbody& src) = delete;
   ~Rigidbody() = default;
 
-  GL::Mesh& mesh();
   const std::vector<Rigidbody_Particle>& particles() const;
 
-  Pose pose;
+  Scene_Object& obj();
 
   void operator=(const Rigidbody& src) = delete;
   Rigidbody& operator=(Rigidbody&& src) = default;
 private:
-  GL::Mesh body;
+  Scene_Object body;
   std::vector<Rigidbody_Particle> _particles;
 
   /* Never updated. */

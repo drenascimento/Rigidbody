@@ -235,10 +235,20 @@ Mode Simulate::UIsidebar(Manager& manager, Scene& scene, Undo& undo, Widgets& wi
     if(ImGui::CollapsingHeader("Rigidbody")) {
         ImGui::PushID(0);
         // TODO: Add a global scene_rigidbody?
-        if(ImGui::Button("Add cube")) {
-            GL::Mesh mesh = Util::cube_mesh(1.0f);
+        //if(ImGui::Button("Add cube")) {
+        //    GL::Mesh mesh = Util::cube_mesh(1.0f);
+        //    Scene_Rigidbody scene_r = Scene_Rigidbody(scene.reserve_id());
+        //    scene_r.addRigidbody(Rigidbody(std::move(mesh)));
+        //    undo.add_rigidbody(std::move(scene_r));
+        //}
+        if(ImGui::Button("Add all objects")) {
             Scene_Rigidbody scene_r = Scene_Rigidbody(scene.reserve_id());
-            scene_r.addRigidbody(Rigidbody(std::move(mesh)));
+            scene.for_items([&scene_r](Scene_Item& item) {
+                if (item.is<Scene_Object>()) {
+                    Scene_Object& obj = item.get<Scene_Object>();
+                    scene_r.addRigidbody(Rigidbody(std::move(obj)));
+                }
+            });
             undo.add_rigidbody(std::move(scene_r));
         }
         if(ImGui::Button("Start")) {
