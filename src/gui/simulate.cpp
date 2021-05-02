@@ -215,11 +215,25 @@ Mode Simulate::UIsidebar(Manager& manager, Scene& scene, Undo& undo, Widgets& wi
         }
 
         ImGui::PopID();
+
+        ImGui::Separator();
     }
 
     if(ImGui::Button("Generate BVH")) {
         clear_particles(scene);
         build_scene(scene);
+    }
+
+    if(ImGui::CollapsingHeader("Rigidbody")) {
+        ImGui::PushID(0);
+        // TODO: Add a global scene_rigidbody?
+        if(ImGui::Button("Add cube")) {
+            GL::Mesh mesh = Util::cube_mesh(1.0f);
+            Scene_Rigidbody scene_r = Scene_Rigidbody(scene.reserve_id());
+            scene_r.addRigidbody(Rigidbody(std::move(mesh)));
+            scene.add(std::move(scene_r));
+        }
+        ImGui::PopID();
     }
 
     return mode;
