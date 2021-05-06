@@ -8,8 +8,14 @@
 
 Rigidbody::Rigidbody(Scene_Object& obj) : body(obj) {
     // TODO: Initialize pose here, or perhaps just modify it in update
+
 }
 
-Scene_Object& Rigidbody::obj() {
-    return body;
+void Rigidbody::render(const Mat4& view) {
+    body.render(view);
+}
+
+
+Pose& Rigidbody::pose() {
+    return body.pose;
 }

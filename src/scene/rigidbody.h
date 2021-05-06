@@ -21,11 +21,10 @@ public:
   ~Rigidbody() = default;
 
   const std::vector<Rigidbody_Particle>& particles() const;
-
-  Scene_Object& obj();
+  void render(const Mat4& view);
+  Pose& pose();
 
   void operator=(const Rigidbody& src) = delete;
-  //Rigidbody& operator=(Rigidbody&& src) = default;
 private:
   Scene_Object& body;
   std::vector<Rigidbody_Particle> _particles;
