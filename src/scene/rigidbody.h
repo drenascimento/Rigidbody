@@ -15,7 +15,7 @@ struct Rigidbody_Particle {
 
 class Rigidbody {
 public:
-  Rigidbody(Scene_Object&& obj);
+  Rigidbody(Scene_Object& obj);
   Rigidbody(Rigidbody&& src) = default;
   Rigidbody(const Rigidbody& src) = delete;
   ~Rigidbody() = default;
@@ -25,9 +25,9 @@ public:
   Scene_Object& obj();
 
   void operator=(const Rigidbody& src) = delete;
-  Rigidbody& operator=(Rigidbody&& src) = default;
+  //Rigidbody& operator=(Rigidbody&& src) = default;
 private:
-  Scene_Object body;
+  Scene_Object& body;
   std::vector<Rigidbody_Particle> _particles;
 
   /* Never updated. */

@@ -302,7 +302,6 @@ Scene_Particles& Scene::get_particles(Scene_ID id) {
     return entry->second.get<Scene_Particles>();
 }
 
-// NOTE: If we don't actually use this, delete it
 Scene_Rigidbody& Scene::get_rigidbody(Scene_ID id) {
     auto entry = objs.find(id);
     assert(entry != objs.end());

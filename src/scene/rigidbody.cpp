@@ -6,7 +6,7 @@
 #include <cmath>
 
 
-Rigidbody::Rigidbody(Scene_Object&& obj) : body(std::move(obj)) {
+Rigidbody::Rigidbody(Scene_Object& obj) : body(obj) {
     // TODO: Initialize pose here, or perhaps just modify it in update
 }
 

@@ -154,99 +154,14 @@ Mode Simulate::UIsidebar(Manager& manager, Scene& scene, Undo& undo, Widgets& wi
 
     update_bvh(scene, undo);
 
-    if(ImGui::CollapsingHeader("Add New Emitter")) {
-        ImGui::PushID(0);
-
-        static Scene_Particles::Options gui_opt;
-        static Solid_Type gui_type;
-        ImGui::ColorEdit3("Color", gui_opt.color.data);
-        ImGui::DragFloat("Speed", &gui_opt.velocity, 0.1f, 0.0f, std::numeric_limits<float>::max(),
-                         "%.2f");
-        ImGui::SliderFloat("Angle", &gui_opt.angle, 0.0f, 180.0f, "%.2f");
-        ImGui::DragFloat("Scale", &gui_opt.scale, 0.01f, 0.01f, 1.0f, "%.2f");
-        ImGui::DragFloat("Lifetime", &gui_opt.lifetime, 0.01f, 0.0f,
-                         std::numeric_limits<float>::max(), "%.2f");
-        ImGui::DragFloat("Particles/Sec", &gui_opt.pps, 1.0f, 1.0f,
-                         std::numeric_limits<float>::max(), "%.2f");
-        ImGui::Checkbox("Enabled", &gui_opt.enabled);
-
-        int n_types = (int)Solid_Type::count;
-        if(!scene.has_obj()) {
-            n_types--;
-            if(gui_type == Solid_Type::custom) gui_type = Solid_Type::sphere;
-        }
-        ImGui::Combo("Particle", (int*)&gui_type, Solid_Type_Names, n_types);
-
-        std::vector<char*> names;
-        std::vector<Scene_ID> ids;
-        static int name_idx = 0;
-        if(gui_type == Solid_Type::custom) {
-            scene.for_items([&names, &ids](Scene_Item& item) {
-                if(item.is<Scene_Object>() && item.get<Scene_Object>().is_editable()) {
-                    names.push_back(item.name().first);
-                    ids.push_back(item.id());
-                }
-            });
-            ImGui::Combo("Mesh", &name_idx, names.data(), (int)names.size());
-            name_idx = clamp(name_idx, 0, (int)names.size());
-        }
-
-        if(ImGui::Button("Add")) {
-            GL::Mesh mesh;
-            switch(gui_type) {
-            case Solid_Type::cube: {
-                mesh = Util::cube_mesh(1.0f);
-            } break;
-            case Solid_Type::cylinder: {
-                mesh = Util::cyl_mesh(0.5f, 1.0f, 8);
-            } break;
-            case Solid_Type::torus: {
-                mesh = Util::torus_mesh(0.5f, 1.0f, 12, 8);
-            } break;
-            case Solid_Type::sphere: {
-                mesh = Util::sphere_mesh(1.0f, 1);
-            } break;
-            case Solid_Type::custom: {
-                mesh = scene.get_obj(ids[name_idx]).mesh().copy();
-            } break;
-            default: break;
-            }
-            Scene_Particles particles(scene.reserve_id(), std::move(mesh));
-            particles.opt.color = gui_opt.color;
-            particles.opt.velocity = gui_opt.velocity;
-            particles.opt.angle = gui_opt.angle;
-            particles.opt.scale = gui_opt.scale;
-            particles.opt.lifetime = gui_opt.lifetime;
-            particles.opt.pps = gui_opt.pps;
-            particles.opt.enabled = gui_opt.enabled;
-            undo.add_particles(std::move(particles));
-        }
-
-        ImGui::PopID();
-
-        ImGui::Separator();
-    }
-
-    if(ImGui::Button("Generate BVH")) {
-        clear_particles(scene);
-        build_scene(scene);
-    }
-
     if(ImGui::CollapsingHeader("Rigidbody")) {
         ImGui::PushID(0);
-        // TODO: Add a global scene_rigidbody?
-        //if(ImGui::Button("Add cube")) {
-        //    GL::Mesh mesh = Util::cube_mesh(1.0f);
-        //    Scene_Rigidbody scene_r = Scene_Rigidbody(scene.reserve_id());
-        //    scene_r.addRigidbody(Rigidbody(std::move(mesh)));
-        //    undo.add_rigidbody(std::move(scene_r));
-        //}
         if(ImGui::Button("Add all objects")) {
             Scene_Rigidbody scene_r = Scene_Rigidbody(scene.reserve_id());
             scene.for_items([&scene_r](Scene_Item& item) {
                 if (item.is<Scene_Object>()) {
                     Scene_Object& obj = item.get<Scene_Object>();
-                    scene_r.addRigidbody(Rigidbody(std::move(obj)));
+                    scene_r.addRigidbody(Rigidbody(obj));
                 }
             });
             undo.add_rigidbody(std::move(scene_r));

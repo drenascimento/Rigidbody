@@ -106,7 +106,7 @@ public:
     Scene_Object& get_obj(Scene_ID id);
     Scene_Light& get_light(Scene_ID id);
     Scene_Particles& get_particles(Scene_ID id);
-    Scene_Rigidbody& get_rigidbody(Scene_ID id); // TODO: Implement
+    Scene_Rigidbody& get_rigidbody(Scene_ID id);
     std::string set_env_map(std::string file);
 
     bool has_env_light() const;
