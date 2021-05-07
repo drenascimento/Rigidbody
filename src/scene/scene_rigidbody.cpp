@@ -42,11 +42,13 @@ void Scene_Rigidbody::for_rigidbody(std::function<void(Rigidbody&)> func) {
 
 void Scene_Rigidbody::step(float dt) {
     BBox bounds;
+    size_t num_particles = 0;
     /* 1st step: Compute particle values */
     // Position, velocity, relative position
-    for_rigidbody([&bounds](Rigidbody& body){
+    for_rigidbody([&bounds, &num_particles](Rigidbody& body){
         bounds.enclose(body.bbox());
         for (Rigidbody_Particle& p : body.particles()) {
+            num_particles++;
             p.update();
         }
     });
@@ -55,36 +57,90 @@ void Scene_Rigidbody::step(float dt) {
     size_t width  = ceilf((bounds.max.x - bounds.min.x) / (2.f * particle_radius));
     size_t height = ceilf((bounds.max.y - bounds.min.y) / (2.f * particle_radius));
     size_t depth  = ceilf((bounds.max.z - bounds.min.z) / (2.f * particle_radius));
+
     std::vector<uint32_t> grid;
-    // max particles in voxel is a buffer for when multiple particles fall in the same voxel.
-    grid.resize(width * height * depth * max_particles_in_voxel);
+    grid.resize(width * height * depth * max_particles_in_voxel, 0);
 
-    std::vector<Rigidbody> next;
-    next.reserve(bodies.size());
-    for (size_t i=0; i < bodies.size(); i++) {
-        Rigidbody& r = bodies[i];
+    /* NOTE: Particles in grid are 1-indexed, 0 index indicates grid is empty at that location. */
+    std::vector<Rigidbody_Particle*> particles;
+    particles.push_back({});
 
-        for (Rigidbody_Particle& p : r.particles()) {
-            size_t x, y, z;
+    {
+        std::vector<Rigidbody> next;
+        next.reserve(bodies.size());
 
-            x = ceilf((p.pos.x - bounds.min.x) / (2.f * particle_radius));
-            y = ceilf((p.pos.y - bounds.min.y) / (2.f * particle_radius));
-            z = ceilf((p.pos.z - bounds.min.z) / (2.f * particle_radius));
+        size_t particle_index = 0;
 
-            grid[(x * height * depth + y * depth + z) * max_particles_in_voxel] = i;
+        for (size_t i=0; i < bodies.size(); i++) {
+            Rigidbody& r = bodies[i];
+
+            for (Rigidbody_Particle& p : r.particles()) {
+                particle_index++;
+                particles.push_back(&p);
+
+                size_t x, y, z;
+
+                x = ceilf((p.pos.x - bounds.min.x) / (2.f * particle_radius));
+                y = ceilf((p.pos.y - bounds.min.y) / (2.f * particle_radius));
+                z = ceilf((p.pos.z - bounds.min.z) / (2.f * particle_radius));
+
+                size_t index = (x * height * depth + y * depth + z) * max_particles_in_voxel;
+                size_t offset = 0;
+
+                while (grid[index + offset] != 0) offset++;
+
+                // In the *very rare* case of overflow, just ignore additional particles
+                if (offset < max_particles_in_voxel) {
+                    grid[index + offset] = particle_index;
+                }
+            }
+            next.emplace_back(std::move(r));
         }
-
-        next.emplace_back(std::move(r));
+        bodies = std::move(next);
     }
-    bodies = std::move(next);
 
     /* 3rd step: Get collisions */
+    for (size_t x = 0; x < width; x++) {
+    for (size_t y = 0; y < height; y++) {
+    for (size_t z = 0; z < depth; z++) {
+
+        size_t index = (x * height * depth + y * depth + z) * max_particles_in_voxel;
+
+        for (size_t offset = 0; offset < max_particles_in_voxel && grid[index + offset] != 0; offset++) {
+            // Get all points around (x,y,z)
+            for (size_t xp = x-1; xp <= x+1; xp++) {
+            for (size_t yp = y-1; yp <= y+1; yp++) {
+            for (size_t zp = z-1; zp <= z+1; zp++) {
+                if (xp < 0 || xp >= width || yp < 0 || yp >= height || zp < 0 || zp >= depth) continue;
+
+                size_t neighbor_index = (xp * height * depth + yp * depth + zp) * max_particles_in_voxel;
+
+                for (size_t neighbor_offset = 0; neighbor_offset < max_particles_in_voxel && grid[neighbor_index + neighbor_offset] != 0; neighbor_offset++) {
+
+                    /* Found a pair of colliding particles! Update my body only. */
+
+                    Rigidbody_Particle *my_particle = particles.at(grid[index + offset]);
+                    Rigidbody_Particle *neighbor_particle = particles.at(grid[neighbor_index + neighbor_offset]);
+
+                    // Apply update to my body
+                    // Call accumulate force
+                    // Call accumulate torque
+
+                }
+
+            }}}
+        }
+
+
+    }}}
+
 
     /* 4th step: Compute change in momenta and apply it to rigid bodies */
-
+    // Loop over all bodies calling apply_partial_updates
+    for_rigidbody([dt](Rigidbody& body){
+        body.apply_partial_updates(dt);
+    });
     /* 5th step: Compute new center_of_mass position and quaternion */
-
-    /* 6th step: Convert center_of_mass and quaternion and apply to body.pose() */
 
 }
 

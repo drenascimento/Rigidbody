@@ -12,9 +12,8 @@ Rigidbody_Particle::Rigidbody_Particle(Vec3 rel_pos, Rigidbody *owner) : rel_pos
 
 void Rigidbody_Particle::update() {
     pos = Mat4::translate(owner->center_of_mass()) * owner->quaternion().to_mat() * rel_pos;
-    velocity = cross(owner->angular_velocity(), rel_pos);
+    velocity = owner->velocity() + cross(owner->angular_velocity(), rel_pos);
 }
-
 
 
 Rigidbody::Rigidbody(Scene_Object& obj, float particle_radius) : body(obj) {
@@ -42,11 +41,30 @@ void Rigidbody::populate_particles() {
 }
 
 void Rigidbody::render(const Mat4& view) {
+    // TODO: Update body.pos as a function of center_of_mass and quaternion
     body.render(view);
 }
 
 Pose& Rigidbody::pose() {
     return body.pose;
+}
+
+
+void Rigidbody::accumulate_force(Vec3 partial_force) {
+    force += partial_force;
+}
+
+void Rigidbody::accumulate_torque(Vec3 partial_torque) {
+    torque += partial_torque;
+}
+
+void Rigidbody::apply_partial_updates(float dt) {
+
+    P += force * dt;
+    L += torque * dt;
+
+    force = Vec3();
+    torque = Vec3();
 }
 
 const BBox Rigidbody::bbox() {

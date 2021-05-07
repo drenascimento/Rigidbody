@@ -31,6 +31,11 @@ public:
   void render(const Mat4& view);
   Pose& pose();
 
+  void accumulate_force(Vec3 partial_force);
+  void accumulate_torque(Vec3 partial_torque);
+  // Call this function to flush all updates to force and torque
+  void apply_partial_updates(float dt);
+
   const BBox bbox();
 
   const Vec3 center_of_mass();
@@ -43,6 +48,10 @@ private:
   Scene_Object& body;
   std::vector<Rigidbody_Particle> _particles;
   float particle_radius;
+  // Force accumulated in a given iteration
+  Vec3 force;
+  // Torque accumulated in a given iteration
+  Vec3 torque;
   void populate_particles();
 
   /* Never updated. */
