@@ -161,7 +161,7 @@ Mode Simulate::UIsidebar(Manager& manager, Scene& scene, Undo& undo, Widgets& wi
             scene.for_items([&scene_r](Scene_Item& item) {
                 if (item.is<Scene_Object>()) {
                     Scene_Object& obj = item.get<Scene_Object>();
-                    scene_r.addRigidbody(Rigidbody(obj));
+                    scene_r.addRigidbody(Rigidbody(obj, scene_r.particle_radius));
                 }
             });
             undo.add_rigidbody(std::move(scene_r));

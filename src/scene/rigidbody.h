@@ -5,43 +5,59 @@
 #include "object.h"
 #include "pose.h"
 
+class Rigidbody;
 
+// Particle is in owning rigidbody's center_of_mass space, ie center_of_mass is (0,0,0)
 struct Rigidbody_Particle {
-        Vec3 pos;
-        Vec3 velocity;
+  Rigidbody_Particle(Vec3 rel_pos, Rigidbody *owner);
 
-        // TODO: Add particle methods
+  const Vec3 rel_pos;
+  Rigidbody *owner;
+  Vec3 pos;
+  Vec3 velocity;
+
+  // TODO: Add particle methods
+  void update();
 };
 
 class Rigidbody {
 public:
-  Rigidbody(Scene_Object& obj);
+  Rigidbody(Scene_Object& obj, float particle_size);
   Rigidbody(Rigidbody&& src) = default;
   Rigidbody(const Rigidbody& src) = delete;
   ~Rigidbody() = default;
 
-  const std::vector<Rigidbody_Particle>& particles() const;
+  std::vector<Rigidbody_Particle>& particles();
   void render(const Mat4& view);
   Pose& pose();
+
+  const BBox bbox();
+
+  const Vec3 center_of_mass();
+  const Quat quaternion();
+  const Vec3 angular_velocity();
+  const Vec3 velocity();
 
   void operator=(const Rigidbody& src) = delete;
 private:
   Scene_Object& body;
   std::vector<Rigidbody_Particle> _particles;
+  float particle_radius;
+  void populate_particles();
 
   /* Never updated. */
 
-  // Mass
-  int M;
+  // Mass, default to 1kg
+  float M = 1.f;
   // Inertia tensor about the center of mass. Initialize it once, recalculate at time step t by using the rotational matrix of t
   Mat4 inv_inertia_tensor;
 
   /* These are updated in the final step. */
 
   // Rigid body's center of mass
-  Vec3 center_of_mass;
+  Vec3 _center_of_mass;
   // Rigid body's quaternion
-  Quat quaternion;
+  Quat _quaternion;
 
   /* Updated in the collision phase. */
 
