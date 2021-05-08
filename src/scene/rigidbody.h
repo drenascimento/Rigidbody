@@ -16,6 +16,8 @@ struct Rigidbody_Particle {
   Vec3 pos;
   Vec3 velocity;
 
+  const float mass;
+
   // TODO: Add particle methods
   void update();
 };
@@ -33,8 +35,12 @@ public:
 
   void accumulate_force(Vec3 partial_force);
   void accumulate_torque(Vec3 partial_torque);
+
   // Call this function to flush all updates to force and torque
   void apply_partial_updates(float dt);
+
+  // Update position and quaternion based on v and w
+  void update_position(float dt);
 
   const BBox bbox();
 
@@ -60,6 +66,8 @@ private:
   float M = 1.f;
   // Inertia tensor about the center of mass. Initialize it once, recalculate at time step t by using the rotational matrix of t
   Mat4 inv_inertia_tensor;
+
+  Mat4 inertia_tensor();
 
   /* These are updated in the final step. */
 

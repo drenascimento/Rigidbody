@@ -107,7 +107,7 @@ void Scene_Rigidbody::step(float dt) {
         size_t index = (x * height * depth + y * depth + z) * max_particles_in_voxel;
 
         for (size_t offset = 0; offset < max_particles_in_voxel && grid[index + offset] != 0; offset++) {
-            // Get all points around (x,y,z)
+            // Get all points in a block around (x,y,z)
             for (size_t xp = x-1; xp <= x+1; xp++) {
             for (size_t yp = y-1; yp <= y+1; yp++) {
             for (size_t zp = z-1; zp <= z+1; zp++) {
@@ -122,25 +122,33 @@ void Scene_Rigidbody::step(float dt) {
                     Rigidbody_Particle *my_particle = particles.at(grid[index + offset]);
                     Rigidbody_Particle *neighbor_particle = particles.at(grid[neighbor_index + neighbor_offset]);
 
+                    Vec3 rel_pos_other = my_particle->pos - neighbor_particle->pos;
+                    Vec3 rel_vel_other = my_particle->velocity - neighbor_particle->velocity;
+                    Vec3 rel_tangential_vel = rel_vel_other - (dot(rel_vel_other,rel_pos_other.unit()) * rel_pos_other.unit());
+
+                    Vec3 Fis = -spring_coefficient * (2.f * particle_radius - rel_pos_other.norm()) * rel_pos_other.unit();
+                    Vec3 Fid = damping_coefficient * rel_vel_other;
+                    Vec3 Fit = shear_coefficient * rel_tangential_vel;
+
                     // Apply update to my body
-                    // Call accumulate force
-                    // Call accumulate torque
-
+                    Vec3 rel_pos_to_center = my_particle->owner->quaternion().rotate(my_particle->rel_pos);
+                    my_particle->owner->accumulate_force(Fis + Fid + Fit);
+                    my_particle->owner->accumulate_torque(cross(rel_pos_to_center, Fis + Fid + Fit));
                 }
-
             }}}
         }
-
-
     }}}
 
 
     /* 4th step: Compute change in momenta and apply it to rigid bodies */
-    // Loop over all bodies calling apply_partial_updates
     for_rigidbody([dt](Rigidbody& body){
         body.apply_partial_updates(dt);
     });
+
     /* 5th step: Compute new center_of_mass position and quaternion */
+    for_rigidbody([dt](Rigidbody& body){
+        body.update_position(dt);
+    });
 
 }
 

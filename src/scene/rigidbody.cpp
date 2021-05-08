@@ -5,14 +5,14 @@
 #include <algorithm>
 #include <cmath>
 
-Rigidbody_Particle::Rigidbody_Particle(Vec3 rel_pos, Rigidbody *owner) : rel_pos(rel_pos) {
+Rigidbody_Particle::Rigidbody_Particle(Vec3 rel_pos, Rigidbody *owner) : rel_pos(rel_pos), mass(0.1f) {
     this->owner = owner;
     update();
 }
 
 void Rigidbody_Particle::update() {
     pos = Mat4::translate(owner->center_of_mass()) * owner->quaternion().to_mat() * rel_pos;
-    velocity = owner->velocity() + cross(owner->angular_velocity(), rel_pos);
+    velocity = owner->velocity() + cross(owner->angular_velocity(), owner->quaternion().to_mat() * rel_pos);
 }
 
 
@@ -20,6 +20,40 @@ Rigidbody::Rigidbody(Scene_Object& obj, float particle_radius) : body(obj) {
     this->particle_radius = particle_radius;
     populate_particles();
     this->_center_of_mass = (body.bbox().min + body.bbox().max) / 2; // For now this will work
+
+    float Ixx = 0.f;
+    float Iyy = 0.f;
+    float Izz = 0.f;
+    float Ixy = 0.f;
+    float Ixz = 0.f;
+    float Iyz = 0.f;
+
+    M = 0.f;
+    // Initialize inertia tensor
+    for (Rigidbody_Particle& p : _particles) {
+        M += p.mass;
+        float x = p.rel_pos.x;
+        float y = p.rel_pos.y;
+        float z = p.rel_pos.z;
+        float x2 = std::pow(x,2);
+        float y2 = std::pow(y,2);
+        float z2 = std::pow(z,2);
+
+        Ixx += p.mass * (y2 + z2);
+        Iyy += p.mass * (x2 + z2);
+        Izz += p.mass * (x2 + y2);
+
+        Ixy += - p.mass * x * y;
+        Ixz += - p.mass * x * z;
+        Iyz += - p.mass * y * z;
+    }
+
+    Mat4 _inertia_tensor = Mat4(Vec4{Ixx, Ixy, Ixz, 0.f},
+                                Vec4{Ixy, Iyy, Iyz, 0.f},
+                                Vec4{Ixz, Iyz, Izz, 0.f},
+                                Vec4{0.f, 0.f, 0.f, 1.f});
+
+    inv_inertia_tensor = _inertia_tensor.inverse();
 }
 
 
@@ -63,8 +97,31 @@ void Rigidbody::apply_partial_updates(float dt) {
     P += force * dt;
     L += torque * dt;
 
+    v = P/M;
+    w = inertia_tensor() * L;
+
     force = Vec3();
     torque = Vec3();
+}
+
+
+Mat4 Rigidbody::inertia_tensor() {
+    // Multiply inverse inertia tensor by R(t)
+    return _quaternion.to_mat() * inv_inertia_tensor * Mat4::transpose(_quaternion.to_mat());
+}
+
+void Rigidbody::update_position(float dt) {
+    _center_of_mass += v * dt;
+
+    float theta = (w * dt).norm();
+
+    Quat dq = Quat(w.unit() * sinf(theta/2), cosf(theta/2));
+
+    //Vec4 dq = Vec4(w.unit() * sinf(theta/2), cosf(theta/2));
+
+    //Vec4 new_quat = cross(dq, Vec4(_quaternion.complex(), _quaternion.real()));
+
+    //_quaternion = Quat(new_quat.xyz(), new_quat.w);
 }
 
 const BBox Rigidbody::bbox() {
