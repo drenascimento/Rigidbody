@@ -60,17 +60,15 @@ private:
   Vec3 torque;
   void populate_particles();
 
-  /* Never updated. */
-
   // Mass, default to 1kg
   float M = 1.f;
-  // Inertia tensor about the center of mass. Initialize it once, recalculate at time step t by using the rotational matrix of t
+  // Inertia tensor about the center of mass at time 0
   Mat4 inv_inertia_tensor;
-
+  // Inertia tensor at current time
   Mat4 inertia_tensor();
 
-  /* These are updated in the final step. */
-
+  // Offset from mesh position and center of mass
+  Vec3 pos_offset;
   // Rigid body's center of mass
   Vec3 _center_of_mass;
   // Rigid body's quaternion

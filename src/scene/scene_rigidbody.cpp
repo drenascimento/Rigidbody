@@ -54,9 +54,9 @@ void Scene_Rigidbody::step(float dt) {
     });
 
     /* 2nd step: Generate grid, and place particles on grid */
-    size_t width  = ceilf((bounds.max.x - bounds.min.x) / (2.f * particle_radius));
-    size_t height = ceilf((bounds.max.y - bounds.min.y) / (2.f * particle_radius));
-    size_t depth  = ceilf((bounds.max.z - bounds.min.z) / (2.f * particle_radius));
+    int width  = ceilf((bounds.max.x - bounds.min.x) / (2.f * particle_radius));
+    int height = ceilf((bounds.max.y - bounds.min.y) / (2.f * particle_radius));
+    int depth  = ceilf((bounds.max.z - bounds.min.z) / (2.f * particle_radius));
 
     std::vector<uint32_t> grid;
     grid.resize(width * height * depth * max_particles_in_voxel, 0);
@@ -100,17 +100,17 @@ void Scene_Rigidbody::step(float dt) {
     }
 
     /* 3rd step: Get collisions */
-    for (size_t x = 0; x < width; x++) {
-    for (size_t y = 0; y < height; y++) {
-    for (size_t z = 0; z < depth; z++) {
+    for (int x = 0; x < width; x++) {
+    for (int y = 0; y < height; y++) {
+    for (int z = 0; z < depth; z++) {
 
         size_t index = (x * height * depth + y * depth + z) * max_particles_in_voxel;
 
         for (size_t offset = 0; offset < max_particles_in_voxel && grid[index + offset] != 0; offset++) {
             // Get all points in a block around (x,y,z)
-            for (size_t xp = x-1; xp <= x+1; xp++) {
-            for (size_t yp = y-1; yp <= y+1; yp++) {
-            for (size_t zp = z-1; zp <= z+1; zp++) {
+            for (int xp = x-1; xp <= x+1; xp++) {
+            for (int yp = y-1; yp <= y+1; yp++) {
+            for (int zp = z-1; zp <= z+1; zp++) {
                 if (xp < 0 || xp >= width || yp < 0 || yp >= height || zp < 0 || zp >= depth) continue;
 
                 size_t neighbor_index = (xp * height * depth + yp * depth + zp) * max_particles_in_voxel;

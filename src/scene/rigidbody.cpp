@@ -12,7 +12,7 @@ Rigidbody_Particle::Rigidbody_Particle(Vec3 rel_pos, Rigidbody *owner) : rel_pos
 
 void Rigidbody_Particle::update() {
     pos = Mat4::translate(owner->center_of_mass()) * owner->quaternion().to_mat() * rel_pos;
-    velocity = owner->velocity() + cross(owner->angular_velocity(), owner->quaternion().to_mat() * rel_pos);
+    velocity = owner->velocity() + cross(owner->angular_velocity(), owner->quaternion().rotate(rel_pos));
 }
 
 
@@ -20,6 +20,7 @@ Rigidbody::Rigidbody(Scene_Object& obj, float particle_radius) : body(obj) {
     this->particle_radius = particle_radius;
     populate_particles();
     this->_center_of_mass = (body.bbox().min + body.bbox().max) / 2; // For now this will work
+    pos_offset = obj.pose.pos - _center_of_mass;
 
     float Ixx = 0.f;
     float Iyy = 0.f;
@@ -75,14 +76,14 @@ void Rigidbody::populate_particles() {
 }
 
 void Rigidbody::render(const Mat4& view) {
-    // TODO: Update body.pos as a function of center_of_mass and quaternion
+    body.pose.pos = pos_offset + _center_of_mass;
+    body.pose.euler = _quaternion.to_euler();
     body.render(view);
 }
 
 Pose& Rigidbody::pose() {
     return body.pose;
 }
-
 
 void Rigidbody::accumulate_force(Vec3 partial_force) {
     force += partial_force;
@@ -110,18 +111,16 @@ Mat4 Rigidbody::inertia_tensor() {
     return _quaternion.to_mat() * inv_inertia_tensor * Mat4::transpose(_quaternion.to_mat());
 }
 
+
 void Rigidbody::update_position(float dt) {
+    // Position
     _center_of_mass += v * dt;
 
+    // Rotation - NOTE: This updates _quaternion to represent the
+    // rotation _quaternion followed by dq
     float theta = (w * dt).norm();
-
     Quat dq = Quat(w.unit() * sinf(theta/2), cosf(theta/2));
-
-    //Vec4 dq = Vec4(w.unit() * sinf(theta/2), cosf(theta/2));
-
-    //Vec4 new_quat = cross(dq, Vec4(_quaternion.complex(), _quaternion.real()));
-
-    //_quaternion = Quat(new_quat.xyz(), new_quat.w);
+    _quaternion = dq * _quaternion;
 }
 
 const BBox Rigidbody::bbox() {
@@ -142,4 +141,8 @@ const Vec3 Rigidbody::angular_velocity() {
 
 const Vec3 Rigidbody::velocity() {
     return v;
+}
+
+std::vector<Rigidbody_Particle>& Rigidbody::particles() {
+    return _particles;
 }
