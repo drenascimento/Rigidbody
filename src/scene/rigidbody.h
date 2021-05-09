@@ -5,25 +5,22 @@
 #include "object.h"
 #include "pose.h"
 
-class Rigidbody;
-
-// Particle is in owning rigidbody's center_of_mass space, ie center_of_mass is (0,0,0)
-struct Rigidbody_Particle {
-  Rigidbody_Particle(Vec3 rel_pos, Rigidbody *owner);
-
-  const Vec3 rel_pos;
-  Rigidbody *owner;
-  Vec3 pos;
-  Vec3 velocity;
-
-  const float mass;
-
-  // TODO: Add particle methods
-  void update();
-};
 
 class Rigidbody {
+
 public:
+  // Particle is in owning rigidbody's center_of_mass space, ie center_of_mass is (0,0,0)
+  struct Rigidbody_Particle {
+    Rigidbody_Particle(Vec3 rel_pos, Vec3 owner_center_of_mass, Quat owner_quat, Vec3 owner_vel, Vec3 owner_angular_vel);
+
+    const Vec3 rel_pos;
+    Vec3 pos;
+    Vec3 velocity;
+
+    const float mass;
+
+    void update(Vec3 owner_center_of_mass, Quat owner_quat, Vec3 owner_vel, Vec3 owner_angular_vel);
+  };
   Rigidbody(Scene_Object& obj, float particle_size);
   Rigidbody(Rigidbody&& src) = default;
   Rigidbody(const Rigidbody& src) = delete;
@@ -44,8 +41,15 @@ public:
 
   const BBox bbox();
 
-  const Vec3 center_of_mass();
-  const Quat quaternion();
+  // Offset from mesh position and center of mass
+  Vec3 pos_offset;
+  // Rigid body's center of mass
+  Vec3 center_of_mass;
+  // Rigid body's quaternion
+  Quat quaternion;
+
+  //const Vec3 center_of_mass();
+  //const Quat quaternion();
   const Vec3 angular_velocity();
   const Vec3 velocity();
 
@@ -67,12 +71,6 @@ private:
   // Inertia tensor at current time
   Mat4 inertia_tensor();
 
-  // Offset from mesh position and center of mass
-  Vec3 pos_offset;
-  // Rigid body's center of mass
-  Vec3 _center_of_mass;
-  // Rigid body's quaternion
-  Quat _quaternion;
 
   /* Updated in the collision phase. */
 
