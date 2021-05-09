@@ -158,10 +158,12 @@ Mode Simulate::UIsidebar(Manager& manager, Scene& scene, Undo& undo, Widgets& wi
         ImGui::PushID(0);
         if(ImGui::Button("Add all objects")) {
             Scene_Rigidbody scene_r = Scene_Rigidbody(scene.reserve_id());
-            scene.for_items([&scene_r](Scene_Item& item) {
+            size_t index = 0;
+            scene.for_items([&index, &scene_r](Scene_Item& item) {
                 if (item.is<Scene_Object>()) {
                     Scene_Object& obj = item.get<Scene_Object>();
-                    scene_r.addRigidbody(Rigidbody(obj, scene_r.particle_radius));
+                    scene_r.addRigidbody(Rigidbody(index, obj, scene_r.particle_radius));
+                    index++;
                 }
             });
             undo.add_rigidbody(std::move(scene_r));

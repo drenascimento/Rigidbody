@@ -6,7 +6,8 @@
 #include <cmath>
 #include <iostream>
 
-Rigidbody::Rigidbody_Particle::Rigidbody_Particle(Vec3 rel_pos, Vec3 owner_center_of_mass, Quat owner_quat, Vec3 owner_vel, Vec3 owner_angular_vel) : rel_pos(rel_pos), mass(0.1f) {
+Rigidbody::Rigidbody_Particle::Rigidbody_Particle(size_t owner_index,Vec3 rel_pos, Vec3 owner_center_of_mass, Quat owner_quat, Vec3 owner_vel, Vec3 owner_angular_vel) :
+    rel_pos(rel_pos), mass(0.1f), owner_index(owner_index) {
     //this->owner = owner;
     //std::cout << "Quaternion, construction (real, complex): " << owner.quaternion.w << " " << owner.quaternion.x << " " << owner.quaternion.y << " " << owner.quaternion.z << "\n";
     update(owner_center_of_mass, owner_quat, owner_vel, owner_angular_vel);
@@ -36,7 +37,7 @@ void Rigidbody::Rigidbody_Particle::update(Vec3 owner_center_of_mass, Quat owner
 }
 
 
-Rigidbody::Rigidbody(Scene_Object& obj, float particle_radius) : body(obj) {
+Rigidbody::Rigidbody(size_t index, Scene_Object& obj, float particle_radius) : body(obj), index(index) {
     this->particle_radius = particle_radius;
     this->center_of_mass = (body.bbox().min + body.bbox().max) / 2.f; // For now this will work
 
@@ -99,7 +100,7 @@ void Rigidbody::populate_particles() {
     for (float x = start.x + r; x <= end.x - r; x += 2*r) {
     for (float y = start.y + r; y <= end.y - r; y += 2*r) {
     for (float z = start.z + r; z <= end.z - r; z += 2*r) {
-        _particles.push_back(Rigidbody_Particle(Vec3(x,y,z), center_of_mass, quaternion, v, w));
+        _particles.push_back(Rigidbody_Particle(index, Vec3(x,y,z), center_of_mass, quaternion, v, w));
     }}}
 }
 
@@ -146,11 +147,17 @@ void Rigidbody::update_position(float dt) {
     if (std::abs(center_of_mass.x) > 100.f) {
         std::cout << "center of mass x: " << center_of_mass.x << "\n";
     }
+
     // Rotation - NOTE: This updates _quaternion to represent the
     // rotation _quaternion followed by dq
     float theta = (w * dt).norm();
-    Quat dq = Quat(w.unit() * sinf(theta/2), cosf(theta/2));
+    Vec3 xyz = w.norm() == 0 ? Vec3() : w.unit() * sinf(theta/2); // If w is 0 vector, w.unit() blows up
+    Quat dq = Quat(xyz.x, xyz.y, xyz.z, cosf(theta/2));
+
     quaternion = dq * quaternion;
+    if(std::abs(quaternion.real()) > 100.f || std::abs(quaternion.x) > 100.f || std::abs(quaternion.y) > 100.f || std::abs(quaternion.z) > 100.f ) {
+        std::cout << "Quaternion blew up: " << quaternion << "\n";
+    }
 }
 
 const BBox Rigidbody::bbox() {
