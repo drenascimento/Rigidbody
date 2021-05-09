@@ -48,6 +48,7 @@ public:
   Options opt;
   Pose pose;
   Anim_Pose anim;
+  size_t num_bodies = 0;
 private:
   std::vector<Rigidbody> bodies;
   Scene_ID _id;

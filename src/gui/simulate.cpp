@@ -158,15 +158,28 @@ Mode Simulate::UIsidebar(Manager& manager, Scene& scene, Undo& undo, Widgets& wi
         ImGui::PushID(0);
         if(ImGui::Button("Add all objects")) {
             Scene_Rigidbody scene_r = Scene_Rigidbody(scene.reserve_id());
-            size_t index = 0;
-            scene.for_items([&index, &scene_r](Scene_Item& item) {
+            scene.for_items([&scene_r](Scene_Item& item) {
                 if (item.is<Scene_Object>()) {
                     Scene_Object& obj = item.get<Scene_Object>();
-                    scene_r.addRigidbody(Rigidbody(index, obj, scene_r.particle_radius));
-                    index++;
+                    scene_r.addRigidbody(Rigidbody(scene_r.num_bodies, obj, scene_r.particle_radius, false));
                 }
             });
             undo.add_rigidbody(std::move(scene_r));
+        }
+        if(obj_opt.has_value() && obj_opt.value().get().is<Scene_Object>() && ImGui::Button("Add selected as static rigidbody")) {
+            Scene_ID id;
+            bool found = false;
+            scene.for_items([&id, &found](Scene_Item& item) {
+                if (item.is<Scene_Rigidbody>()) {
+                    id = item.id();
+                    found = true;
+                }
+            });
+            if (found) {
+                Scene_Rigidbody& scene_r = scene.get(id).value().get().get<Scene_Rigidbody>();
+                Scene_Object& obj = obj_opt.value().get().get<Scene_Object>();
+                scene_r.addRigidbody(Rigidbody(scene_r.num_bodies, obj, scene_r.particle_radius, true));
+            }
         }
         if(ImGui::Button("Start")) {
             scene.for_items([](Scene_Item& item) {

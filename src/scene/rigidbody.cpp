@@ -8,45 +8,20 @@
 
 Rigidbody::Rigidbody_Particle::Rigidbody_Particle(size_t owner_index,Vec3 rel_pos, Vec3 owner_center_of_mass, Quat owner_quat, Vec3 owner_vel, Vec3 owner_angular_vel) :
     rel_pos(rel_pos), mass(0.1f), owner_index(owner_index) {
-    //this->owner = owner;
-    //std::cout << "Quaternion, construction (real, complex): " << owner.quaternion.w << " " << owner.quaternion.x << " " << owner.quaternion.y << " " << owner.quaternion.z << "\n";
     update(owner_center_of_mass, owner_quat, owner_vel, owner_angular_vel);
 }
 
 void Rigidbody::Rigidbody_Particle::update(Vec3 owner_center_of_mass, Quat owner_quat, Vec3 owner_vel, Vec3 owner_angular_vel) {
     pos = owner_center_of_mass + owner_quat.rotate(rel_pos);
     velocity = owner_vel + cross(owner_angular_vel, owner_quat.rotate(rel_pos));
-
-    //pos = owner.center_of_mass + owner.quaternion.rotate(rel_pos);
-    //if (std::abs(owner.center_of_mass.x) > 100.f) {
-    //    std::cout << "Center of mass x: " << owner.center_of_mass.x << ", abs: " << std::abs(owner.center_of_mass.x) << "\n";
-    //    // REcompile
-    //}
-
-    //if (std::abs(owner.quaternion.rotate(rel_pos).x) > 100.f) {
-    //    std::cout << "Rel_pos x: " << rel_pos.x << ", abs: " << std::abs(rel_pos.x) << "\n";
-    //    std::cout << "Rel_pos y: " << rel_pos.y << ", abs: " << std::abs(rel_pos.y) << "\n";
-    //    std::cout << "Rel_pos z: " << rel_pos.z << ", abs: " << std::abs(rel_pos.z) << "\n";
-
-    //    std::cout << "Quaternion (real, complex): " << owner.quaternion.w << " " << owner.quaternion.x << " " << owner.quaternion.y << " " << owner.quaternion.z << "\n";
-
-
-    //    std::cout << "Rotated rel_pos x: " << owner.quaternion.rotate(rel_pos).x << ", abs: " << std::abs(owner.quaternion.rotate(rel_pos).x) << "\n";
-    //}
-    //velocity = owner.velocity() + cross(owner.angular_velocity(), owner.quaternion.rotate(rel_pos));
 }
 
 
-Rigidbody::Rigidbody(size_t index, Scene_Object& obj, float particle_radius) : body(obj), index(index) {
+Rigidbody::Rigidbody(size_t index, Scene_Object& obj, float particle_radius, bool is_static) : body(obj), index(index), is_static(is_static) {
     this->particle_radius = particle_radius;
     this->center_of_mass = (body.bbox().min + body.bbox().max) / 2.f; // For now this will work
 
-    if (std::abs(center_of_mass.x) > 100.f) {
-        std::cout << "center of mass x: " << center_of_mass.x << "\n";
-    }
-
     quaternion = Quat::euler(obj.pose.euler);
-    std::cout << "Quaternion, original (real, complex): " << quaternion.w << " " << quaternion.x << " " << quaternion.y << " " << quaternion.z << "\n";
 
     populate_particles();
     pos_offset = obj.pose.pos - center_of_mass;
@@ -124,6 +99,8 @@ void Rigidbody::accumulate_torque(Vec3 partial_torque) {
 
 void Rigidbody::apply_partial_updates(float dt) {
 
+    if (is_static) return;
+
     P += force * dt;
     L += torque * dt;
 
@@ -142,35 +119,23 @@ Mat4 Rigidbody::inertia_tensor() {
 
 
 void Rigidbody::update_position(float dt) {
+    if (is_static) return;
+
     // Position
     center_of_mass += v * dt;
-    if (std::abs(center_of_mass.x) > 100.f) {
-        std::cout << "center of mass x: " << center_of_mass.x << "\n";
-    }
 
     // Rotation - NOTE: This updates _quaternion to represent the
     // rotation _quaternion followed by dq
     float theta = (w * dt).norm();
-    Vec3 xyz = w.norm() == 0 ? Vec3() : w.unit() * sinf(theta/2); // If w is 0 vector, w.unit() blows up
+    Vec3 xyz = w.norm() <= EPS_F ? Vec3() : w.unit() * sinf(theta/2); // If w is 0 vector, w.unit() blows up
     Quat dq = Quat(xyz.x, xyz.y, xyz.z, cosf(theta/2));
 
     quaternion = dq * quaternion;
-    if(std::abs(quaternion.real()) > 100.f || std::abs(quaternion.x) > 100.f || std::abs(quaternion.y) > 100.f || std::abs(quaternion.z) > 100.f ) {
-        std::cout << "Quaternion blew up: " << quaternion << "\n";
-    }
 }
 
 const BBox Rigidbody::bbox() {
     return body.bbox();
 }
-
-//const Vec3 Rigidbody::center_of_mass() {
-//    return _center_of_mass;
-//}
-//
-//const Quat Rigidbody::quaternion() {
-//    return _quaternion;
-//}
 
 const Vec3 Rigidbody::angular_velocity() {
     return w;
@@ -182,4 +147,8 @@ const Vec3 Rigidbody::velocity() {
 
 std::vector<Rigidbody::Rigidbody_Particle>& Rigidbody::particles() {
     return _particles;
+}
+
+float Rigidbody::mass() {
+    return M;
 }

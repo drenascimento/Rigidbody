@@ -10,16 +10,16 @@
 Scene_Rigidbody::Scene_Rigidbody(Scene_ID id) {
     _id = id;
     snprintf(opt.name, max_name_len, "Rigidbody group %d", id);
-    // TODO: Maybe compute bbox if needed
     _bbox = BBox();
     opt.enabled = false;
 }
 
 void Scene_Rigidbody::clear() {
-    // TODO: Clear the rigid bodies vector
+    // TODO: ?
 }
 
 void Scene_Rigidbody::addRigidbody(Rigidbody&& body) {
+    num_bodies++;
     bodies.push_back(std::move(body));
 }
 
@@ -63,9 +63,6 @@ void Scene_Rigidbody::step(float dt) {
     particles.push_back({});
 
     {
-        //std::vector<Rigidbody> next;
-        //next.reserve(bodies.size());
-
         size_t particle_index = 0;
 
         for (size_t i=0; i < bodies.size(); i++) {
@@ -83,33 +80,14 @@ void Scene_Rigidbody::step(float dt) {
                 size_t index = (x * height * depth + y * depth + z) * max_particles_in_voxel;
                 size_t offset = 0;
 
-                try {
-                    while (offset < max_particles_in_voxel && grid.at(index + offset) != 0) offset++;
-
-                    // In the *very rare* case of overflow, just ignore additional particles
-                    if (offset < max_particles_in_voxel) {
-                        grid.at(index + offset) = particle_index;
-                    } else {
-                        throw (1);
-                    }
-                } catch(...) {
+                // In the *very rare* case of overflow, just ignore additional particles
+                if (offset < max_particles_in_voxel) {
+                    grid.at(index + offset) = particle_index;
+                } else {
                     std::cout << "Dropped particle\n";
-                    std::cout << "Index: " << index << "\n";
-                    std::cout << "x,y,z: " << x << " " << y << " " << z << "\n";
-                    for (int psza = 0; psza < max_particles_in_voxel; psza++) {
-                        if (index + psza < grid.size()) {
-                            std::cout << "Particle: " << grid.at(index + psza) << ", ";
-                        } else {
-                            std::cout << "ew (index): " << index + psza << "\n";
-                        }
-                    }
-                    std::cout << "\n";
-                    std::cout << "width, heigh, depth: " << width << " " << height << " " << depth << "\n";
                 }
             }
-            //next.emplace_back(std::move(r));
         }
-        //bodies = std::move(next);
     }
 
     /* 3rd step: Get collisions */
@@ -155,6 +133,11 @@ void Scene_Rigidbody::step(float dt) {
         }
     }}}
 
+
+    /* 3.5th step: Apply gravity */
+    for_rigidbody([](Rigidbody& body){
+        body.accumulate_force(Vec3{0.f, -9.8f, 0.f} * body.mass());
+    });
 
     /* 4th step: Compute change in momenta and apply it to rigid bodies */
     for_rigidbody([dt](Rigidbody& body){

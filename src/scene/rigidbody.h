@@ -22,7 +22,9 @@ public:
 
     void update(Vec3 owner_center_of_mass, Quat owner_quat, Vec3 owner_vel, Vec3 owner_angular_vel);
   };
-  Rigidbody(size_t index, Scene_Object& obj, float particle_size);
+
+
+  Rigidbody(size_t index, Scene_Object& obj, float particle_size, bool is_static);
   Rigidbody(Rigidbody&& src) = default;
   Rigidbody(const Rigidbody& src) = delete;
   ~Rigidbody() = default;
@@ -49,11 +51,11 @@ public:
   // Rigid body's quaternion
   Quat quaternion = Quat();
 
-  //const Vec3 center_of_mass();
-  //const Quat quaternion();
   const Vec3 angular_velocity();
   const Vec3 velocity();
+  float mass();
   const size_t index;
+  const bool is_static;
 
   void operator=(const Rigidbody& src) = delete;
 private:
