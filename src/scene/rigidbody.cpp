@@ -113,7 +113,6 @@ void Rigidbody::apply_partial_updates(float dt) {
 
 
 Mat4 Rigidbody::inertia_tensor() {
-    // Multiply inverse inertia tensor by R(t)
     return quaternion.to_mat() * inv_inertia_tensor * Mat4::transpose(quaternion.to_mat());
 }
 

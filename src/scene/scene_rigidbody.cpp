@@ -108,21 +108,34 @@ void Scene_Rigidbody::step(float dt) {
 
                 for (size_t neighbor_offset = 0; neighbor_offset < max_particles_in_voxel && grid.at(neighbor_index + neighbor_offset) != 0; neighbor_offset++) {
 
-                    /* Found a pair of colliding particles! Update my body only. */
+                    /* Possibly found a pair of colliding particles! Update my body only. */
                     Rigidbody::Rigidbody_Particle *my_particle = particles.at(grid.at(index + offset));
                     Rigidbody::Rigidbody_Particle *neighbor_particle = particles.at(grid.at(neighbor_index + neighbor_offset));
 
                     if (my_particle->owner_index == neighbor_particle->owner_index) continue;
 
-                    //std::cout << "Found collision\n";
+                    if ((my_particle->pos - neighbor_particle->pos).norm() > 2.f * particle_radius) continue;
 
-                    Vec3 rel_pos_other = my_particle->pos - neighbor_particle->pos;
-                    Vec3 rel_vel_other = my_particle->velocity - neighbor_particle->velocity;
+                    float real_spring_coefficient = spring_coefficient;
+                    float real_shear_coefficient = shear_coefficient;
+                    float real_damping_coefficient = damping_coefficient;
+
+                    // TODO: Update calculation so it works against the ground
+                    if (bodies.at(neighbor_particle->owner_index).is_static) {
+                        //real_spring_coefficient = 1.f;
+                        //real_shear_coefficient = 0.f;
+                        //real_damping_coefficient = 0.f;
+                    }
+
+                    // TODO: Figure out if equations are all correct here
+                    // We want the relative pos/vel of neighbor with respect to ourselves
+                    Vec3 rel_pos_other = neighbor_particle->pos - my_particle->pos;
+                    Vec3 rel_vel_other = neighbor_particle->velocity - my_particle->velocity;
                     Vec3 rel_tangential_vel = rel_vel_other - (dot(rel_vel_other,rel_pos_other.unit()) * rel_pos_other.unit());
 
-                    Vec3 Fis = -spring_coefficient * (2.f * particle_radius - rel_pos_other.norm()) * rel_pos_other.unit();
-                    Vec3 Fid = damping_coefficient * rel_vel_other;
-                    Vec3 Fit = shear_coefficient * rel_tangential_vel;
+                    Vec3 Fis = -real_spring_coefficient * (2.f * particle_radius - rel_pos_other.norm()) * rel_pos_other.unit();
+                    Vec3 Fid = real_damping_coefficient * rel_vel_other;
+                    Vec3 Fit = real_shear_coefficient * rel_tangential_vel;
 
                     // Apply update to my body
                     Vec3 rel_pos_to_center = bodies.at(my_particle->owner_index).quaternion.rotate(my_particle->rel_pos);
