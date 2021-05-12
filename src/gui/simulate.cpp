@@ -156,6 +156,25 @@ Mode Simulate::UIsidebar(Manager& manager, Scene& scene, Undo& undo, Widgets& wi
 
     if(ImGui::CollapsingHeader("Rigidbody")) {
         ImGui::PushID(0);
+
+        {
+            Scene_ID id;
+            bool found = false;
+            scene.for_items([&id, &found](Scene_Item& item) {
+                if (item.is<Scene_Rigidbody>()) {
+                    id = item.id();
+                    found = true;
+                }
+            });
+            if (found) {
+                Scene_Rigidbody& scene_r = scene.get(id).value().get().get<Scene_Rigidbody>();
+                ImGui::SliderFloat("Particle radius", &scene_r.particle_radius, 0.0001f, 2.f);
+                ImGui::SliderFloat("Time step (delta)", &scene_r.delta_t, 0.00001f, 1.f);
+            }
+        }
+
+
+
         if(ImGui::Button("Add all objects")) {
             Scene_Rigidbody scene_r = Scene_Rigidbody(scene.reserve_id());
             scene.for_items([&scene_r](Scene_Item& item) {

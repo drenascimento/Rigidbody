@@ -37,11 +37,8 @@ void Scene_Rigidbody::for_rigidbody(std::function<void(Rigidbody&)> func) {
 }
 
 void Scene_Rigidbody::step(float dt) {
-    float simulation_dt = 0.001f;
-    //std::cout << dt << "\n";
-    //float const simulation_dt = 0.00001f;
-    for (float t = 0; t < dt; t += simulation_dt) {
-        partial_step(simulation_dt);
+    for (float t = 0; t < dt; t += delta_t) {
+        partial_step(delta_t);
     }
 }
 
@@ -91,7 +88,7 @@ void Scene_Rigidbody::partial_step(float dt) {
 
                 // In the *very rare* case of overflow, just ignore additional particles
                 if (offset < max_particles_in_voxel) {
-                    grid.at(index + offset) = particle_index;
+                    grid[index + offset] = particle_index;
                 } else {
                     std::cout << "Dropped particle\n";
                 }
@@ -106,7 +103,7 @@ void Scene_Rigidbody::partial_step(float dt) {
 
         size_t index = (x * height * depth + y * depth + z) * max_particles_in_voxel;
 
-        for (size_t offset = 0; offset < max_particles_in_voxel && grid.at(index + offset) != 0; offset++) {
+        for (size_t offset = 0; offset < max_particles_in_voxel && grid[index + offset] != 0; offset++) {
             // Get all points in a 3x3 block around (x,y,z)
             for (int xp = x-1; xp <= x+1; xp++) {
             for (int yp = y-1; yp <= y+1; yp++) {
@@ -115,11 +112,11 @@ void Scene_Rigidbody::partial_step(float dt) {
 
                 size_t neighbor_index = (xp * height * depth + yp * depth + zp) * max_particles_in_voxel;
 
-                for (size_t neighbor_offset = 0; neighbor_offset < max_particles_in_voxel && grid.at(neighbor_index + neighbor_offset) != 0; neighbor_offset++) {
+                for (size_t neighbor_offset = 0; neighbor_offset < max_particles_in_voxel && grid[neighbor_index + neighbor_offset] != 0; neighbor_offset++) {
 
                     /* Possibly found a pair of colliding particles! Update my body only. */
-                    Rigidbody::Rigidbody_Particle *my_particle = particles.at(grid.at(index + offset));
-                    Rigidbody::Rigidbody_Particle *neighbor_particle = particles.at(grid.at(neighbor_index + neighbor_offset));
+                    Rigidbody::Rigidbody_Particle *my_particle = particles[grid[index + offset]];
+                    Rigidbody::Rigidbody_Particle *neighbor_particle = particles[grid[neighbor_index + neighbor_offset]];
 
                     if (my_particle->owner_index == neighbor_particle->owner_index) continue;
 
@@ -129,11 +126,9 @@ void Scene_Rigidbody::partial_step(float dt) {
                     float real_shear_coefficient = shear_coefficient;
                     float real_damping_coefficient = damping_coefficient;
 
-                    // TODO: Update calculation so it works against the ground
-                    if (bodies.at(neighbor_particle->owner_index).is_static) {
-                        //std::cout << "colliding with ground\n";
+                    if (bodies[neighbor_particle->owner_index].is_static) {
                         real_spring_coefficient = 1.f;
-                        real_shear_coefficient = 0.f;
+                        real_shear_coefficient = 1.f;
                         real_damping_coefficient = 1.f;
                     }
 
@@ -148,9 +143,9 @@ void Scene_Rigidbody::partial_step(float dt) {
                     Vec3 Fit = real_shear_coefficient * rel_tangential_vel;
 
                     // Apply update to my body
-                    Vec3 rel_pos_to_center = bodies.at(my_particle->owner_index).quaternion.rotate(my_particle->rel_pos);
-                    bodies.at(my_particle->owner_index).accumulate_force((Fis + Fid + Fit) * bodies.at(my_particle->owner_index).mass());
-                    bodies.at(my_particle->owner_index).accumulate_torque(cross(rel_pos_to_center, (Fis + Fid + Fit) * bodies.at(my_particle->owner_index).mass()));
+                    Vec3 rel_pos_to_center = bodies[my_particle->owner_index].quaternion.rotate(my_particle->rel_pos);
+                    bodies[my_particle->owner_index].accumulate_force((Fis + Fid + Fit) * bodies[my_particle->owner_index].mass());
+                    bodies[my_particle->owner_index].accumulate_torque(cross(rel_pos_to_center, (Fis + Fid + Fit) * bodies[my_particle->owner_index].mass()));
                 }
             }}}
         }

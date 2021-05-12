@@ -31,8 +31,9 @@ public:
   void render(const Mat4& view, bool depth_only = false, bool posed = true, bool particles_only = false);
   Scene_ID id() const;
 
-  // TODO: Convert these into parameters
-  static const inline float particle_radius = 0.1f;
+  float particle_radius = 0.1f;
+  float delta_t = 0.001f;
+
   static const inline float spring_coefficient = 0.5f;
   static const inline float damping_coefficient = 0.5f;
   static const inline float shear_coefficient = 0.5f;
