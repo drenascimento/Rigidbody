@@ -50,6 +50,7 @@ public:
   Anim_Pose anim;
   size_t num_bodies = 0;
 private:
+  void partial_step(float dt);
   std::vector<Rigidbody> bodies;
   Scene_ID _id;
   BBox _bbox;
