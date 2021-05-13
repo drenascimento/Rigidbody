@@ -1,11 +1,17 @@
 
 cmake_minimum_required(VERSION 3.16)
 
+#define cuda arch
+
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+  set(CMAKE_CUDA_ARCHITECTURES 75)
+endif()
+
 # define project
 
-project(Scotty3D VERSION 1.1
-                 DESCRIPTION "CMU 15-462/662 - Computer Graphics"
-                 LANGUAGES CXX)
+project(Scotty3D-Sim VERSION 0.1
+                 DESCRIPTION "15418 Rigid body simulation - built on top of Scotty3D"
+                 LANGUAGES CXX CUDA)
 
 set(SCOTTY3D_BUILD_REF false)
 
@@ -223,8 +229,16 @@ source_group(lib FILES ${SOURCES_SCOTTY3D_LIB})
 source_group(scene FILES ${SOURCES_SCOTTY3D_SCENE})
 source_group(platform FILES ${SOURCES_SCOTTY3D_PLATFORM})
 
+# rigid body simulation dependencies
+add_library(sim_accelerators STATIC
+  "src/scene/kernels.cu"
+  "src/scene/kernels.h"
+)
 
-
+target_compile_features(sim_accelerators PUBLIC cxx_std_11)
+set_target_properties( sim_accelerators
+                       PROPERTIES CUDA_SEPARABLE_COMPILATION ON
+                      )
 
 # build dependencies
 
@@ -265,7 +279,7 @@ if(WIN32)
 endif()
 
 if(LINUX)
-    target_link_libraries(Scotty3D PRIVATE SDL2)
+    target_link_libraries(Scotty3D PRIVATE SDL2 sim_accelerators)
 endif()
 
 if(APPLE)

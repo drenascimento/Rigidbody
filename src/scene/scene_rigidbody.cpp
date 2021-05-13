@@ -44,13 +44,11 @@ void Scene_Rigidbody::step(float dt) {
 
 void Scene_Rigidbody::partial_step(float dt) {
     BBox bounds;
-    size_t num_particles = 0;
     /* 1st step: Compute particle values */
     // Position, velocity, relative position
-    for_rigidbody([&bounds, &num_particles](Rigidbody& body){
+    for_rigidbody([&bounds](Rigidbody& body){
         bounds.enclose(body.bbox());
         for (Rigidbody::Rigidbody_Particle& p : body.particles()) {
-            num_particles++;
             p.update(body.center_of_mass, body.quaternion, body.velocity(), body.angular_velocity());
         }
     });
@@ -180,5 +178,4 @@ Scene_ID Scene_Rigidbody::id() const {
 }
 
 void Scene_Rigidbody::set_time(float time) {
-    std::cout << "set_time called\n";
 }
