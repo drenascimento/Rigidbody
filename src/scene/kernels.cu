@@ -14,6 +14,31 @@ __device__ float3 operator+(const float3 &a, const float3 &b) {
     return make_float3(a.x+b.x, a.y+b.y, a.z+b.z);
 }
 
+__device__ float3 operator-(const float3 &a, const float3 &b) {
+    return make_float3(a.x-b.x, a.y-b.y, a.z-b.z);
+}
+
+__device__ float3 operator*(const float3&a, const float3 &b) {
+    return make_float3(a.x*b.x, a.y*b.y, a.z*b.z);
+}
+
+__device__ float3 operator*(const float& a, const float3 &b) {
+    return make_float3(a*b.x, a*b.y, a*b.z);
+}
+
+__device__ float norm(const float3 &a) {
+    return sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+}
+
+__device__ float3 unit(const float3 &a) {
+    float my_norm = norm(a);
+    return make_float3(a.x/my_norm, a.y/my_norm, a.z/my_norm);
+}
+
+__device__ float dot(const float3 &a, const float3 &b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
 __device__ float3 cross(const float3 &a, const float3 &b) {
     return make_float3(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x);
 }
@@ -37,15 +62,14 @@ __device__ float3 rotate(const float4 &quat, const float3 &v) {
 }
 
 // Particles of the form [x,y,z,vx,vy,vz]
-__global__ void step_kernel(int N, float *center_of_mass, float *quaternion, float *velocity, float *angular_velocity, float* box_min, float* box_max, float *box_all,
-                            int *particle_indices, float particle_radius, int num_particles, float *particles, int width, int height, int depth, float *out_force, float *out_torque, int *grid) {
+__global__ void step_kernel(int N, float *center_of_mass, float *quaternion, float *velocity, float *angular_velocity,
+                            float* box_min, float* box_max, float *box_all, int *particle_indices, int *particle_owners, float particle_radius,
+                            int num_particles, float *particles, int width, int height, int depth, float *out_force, float *out_torque, int *grid) {
 
-    //const int idx = threadIdx.x + blockDim.x * blockIdx.x;
-    //const int idy = threadIdx.y + blockDim.y * blockIdx.y;
-    //const int idz = threadIdx.z + blockDim.z * blockIdx.z;
+    const int idx = threadIdx.x + blockDim.x * blockIdx.x;
+    const int idy = threadIdx.y + blockDim.y * blockIdx.y;
+    const int idz = threadIdx.z + blockDim.z * blockIdx.z;
     const int threadIndex = threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y;
-
-    //const int threadIndex = idx * height * depth + idy * depth + idz;
 
     /* Clean grid */
 
@@ -95,6 +119,9 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
             particles[i * 6 + 4] = velocity.y;
             particles[i * 6 + 5] = velocity.z;
 
+            /* Assign particle owner as rigid body */
+            particle_owners[i] = threadIndex;
+
             /* Also store particles on grid */
             // No need to use a lock, if we miss a particle (who cares, right?) so long as they are sufficiently
             // small, their contribution will not be missed
@@ -116,6 +143,10 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
             i++;
         }}}
 
+        /* Clean out_force and out_torque */
+        out_force[threadIndex] = 0;
+        out_torque[threadIndex] = 0;
+
         /* Debugging - DELETE */
         if (!(threadIndex == N-1 && i == num_particles) || (i == particle_indices[threadIndex+1])){
             printf("violation!\n");
@@ -128,50 +159,58 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
     /* Collision detection and reaction - write to out_force and out_torque */
 
     int index = threadIndex;
+    int x = idx;
+    int y = idy;
+    int z = idz;
 
-    for (size_t offset = 0; offset < max_particles_in_voxel && grid[index + offset] != 0; offset++) {
+    for (size_t offset = 0; offset < MAX_PARTICLES_IN_CELL && grid[index + offset] != 0; offset++) {
         // Get all points in a 3x3 block around (x,y,z)
         for (int xp = x-1; xp <= x+1; xp++) {
         for (int yp = y-1; yp <= y+1; yp++) {
         for (int zp = z-1; zp <= z+1; zp++) {
             if (xp < 0 || xp >= width || yp < 0 || yp >= height || zp < 0 || zp >= depth) continue;
 
-            size_t neighbor_index = (xp * height * depth + yp * depth + zp) * max_particles_in_voxel;
+            size_t neighbor_index = (xp * height * depth + yp * depth + zp) * MAX_PARTICLES_IN_CELL;
 
-            for (size_t neighbor_offset = 0; neighbor_offset < max_particles_in_voxel && grid[neighbor_index + neighbor_offset] != 0; neighbor_offset++) {
+            for (size_t neighbor_offset = 0; neighbor_offset < MAX_PARTICLES_IN_CELL && grid[neighbor_index + neighbor_offset] != 0; neighbor_offset++) {
 
                 /* Possibly found a pair of colliding particles! Update my body only. */
-                Rigidbody::Rigidbody_Particle *my_particle = particles[grid[index + offset]];
-                Rigidbody::Rigidbody_Particle *neighbor_particle = particles[grid[neighbor_index + neighbor_offset]];
+                float3 my_particle_pos = *((float3*)particles + 6 * (grid[index + offset]));
+                float3 neighbor_particle_pos = *((float3*)particles + 6 * (grid[neighbor_index + neighbor_offset]));
 
-                if (my_particle->owner_index == neighbor_particle->owner_index) continue;
+                float3 my_particle_velocity = *((float3*)particles + 6 * (grid[index + offset]) + 3);
+                float3 neighbor_particle_velocity = *((float3*)particles + 6 * (grid[neighbor_index + neighbor_offset]) + 3);
 
-                //if ((my_particle->pos - neighbor_particle->pos).norm() > 2.f * particle_radius) continue;
+                if (particle_owners[grid[index + offset]] == particle_owners[grid[neighbor_index + neighbor_offset]]) continue;
 
-                float real_spring_coefficient = spring_coefficient;
-                float real_shear_coefficient = shear_coefficient;
-                float real_damping_coefficient = damping_coefficient;
+                float real_spring_coefficient = 0.5f;
+                float real_shear_coefficient = 0.5f;
+                float real_damping_coefficient = 0.5f;
 
-                if (bodies[neighbor_particle->owner_index].is_static) {
-                    real_spring_coefficient = 1.f;
-                    real_shear_coefficient = 1.f;
-                    real_damping_coefficient = 1.f;
-                }
-
-                // TODO: Figure out if equations are all correct here
                 // We want the relative pos/vel of neighbor with respect to ourselves
-                Vec3 rel_pos_other = neighbor_particle->pos - my_particle->pos;
-                Vec3 rel_vel_other = neighbor_particle->velocity - my_particle->velocity;
-                Vec3 rel_tangential_vel = rel_vel_other - (dot(rel_vel_other,rel_pos_other.unit()) * rel_pos_other.unit());
+                float3 rel_pos_other = neighbor_particle_pos - my_particle_pos;
+                float3 rel_vel_other = neighbor_particle_velocity - my_particle_velocity;
+                float3 rel_tangential_vel = rel_vel_other - (dot(rel_vel_other,unit(rel_pos_other)) * unit(rel_pos_other));
 
-                Vec3 Fis = -real_spring_coefficient * std::abs(2.f * particle_radius - rel_pos_other.norm()) * rel_pos_other.unit();
-                Vec3 Fid = real_damping_coefficient * rel_vel_other;
-                Vec3 Fit = real_shear_coefficient * rel_tangential_vel;
+                float3 Fis = -real_spring_coefficient * abs(2.f * particle_radius - norm(rel_pos_other)) * unit(rel_pos_other);
+                float3 Fid = real_damping_coefficient * rel_vel_other;
+                float3 Fit = real_shear_coefficient * rel_tangential_vel;
 
-                // Apply update to my body
-                Vec3 rel_pos_to_center = bodies[my_particle->owner_index].quaternion.rotate(my_particle->rel_pos);
-                bodies[my_particle->owner_index].accumulate_force((Fis + Fid + Fit) * bodies[my_particle->owner_index].mass());
-                bodies[my_particle->owner_index].accumulate_torque(cross(rel_pos_to_center, (Fis + Fid + Fit) * bodies[my_particle->owner_index].mass()));
+                // Write updates to out_force and out_torque. For this we will need synchronization primitives
+
+                float3 center_of_mass_owner = *((float3 *)center_of_mass + 3 * particle_owners[grid[index + offset]]);
+                float3 rel_pos_to_center = my_particle_pos - center_of_mass_owner;
+
+                float3 total_force = Fis + Fid + Fit;
+                float3 total_torque = cross(rel_pos_to_center, total_force);
+
+                atomicAdd(out_force + 3 * (particle_owners[grid[index + offset]]    ), total_force.x);
+                atomicAdd(out_force + 3 * (particle_owners[grid[index + offset]] + 1), total_force.y);
+                atomicAdd(out_force + 3 * (particle_owners[grid[index + offset]] + 2), total_force.z);
+
+                atomicAdd(out_torque + 3 * (particle_owners[grid[index + offset]]    ), total_torque.x);
+                atomicAdd(out_torque + 3 * (particle_owners[grid[index + offset]] + 1), total_torque.y);
+                atomicAdd(out_torque + 3 * (particle_owners[grid[index + offset]] + 2), total_torque.z);
             }
         }}}
     }
@@ -249,6 +288,7 @@ update(int N, float particle_radius, float *center_of_mass, float *quaternion, f
     float* device_angular_velocity;
     int* device_particle_indices;
     float* device_particles;
+    int* device_particle_owners;
     int* device_grid;
     float* device_out_force;
     float* device_out_torque;
@@ -261,10 +301,11 @@ update(int N, float particle_radius, float *center_of_mass, float *quaternion, f
     cudaMalloc((void **) &device_box_max, N * 3 * sizeof(float));
     cudaMalloc((void **) &device_box_all, 6 * sizeof(float));
     cudaMalloc((void **) &device_particle_indices, N * sizeof(int));
-    cudaMalloc((void **) &device_particles, num_particles * 6 * sizeof(int));
-    cudaMalloc((void **) &device_out_force, N * sizeof(float));
-    cudaMalloc((void **) &device_out_torque, N * sizeof(float));
+    cudaMalloc((void **) &device_particles, num_particles * 6 * sizeof(float));
+    cudaMalloc((void **) &device_out_force, N * 3 * sizeof(float));
+    cudaMalloc((void **) &device_out_torque, N * 3 * sizeof(float));
     cudaMalloc((void **) &device_grid, width * height * depth * 3 * sizeof(int));
+    cudaMalloc((void **) &device_particle_owners, num_particles * sizeof(int));
 
     cudaMemcpy(device_center_of_mass, center_of_mass, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(device_quaternion, quaternion, N * 4 * sizeof(float), cudaMemcpyHostToDevice);
@@ -275,8 +316,9 @@ update(int N, float particle_radius, float *center_of_mass, float *quaternion, f
     cudaMemcpy(device_velocity, velocity, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(device_angular_velocity, angular_velocity, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
 
-    step_kernel<<<grid, block>>>(N, device_center_of_mass, device_quaternion, device_velocity, device_angular_velocity, device_box_min, device_box_max, device_box_all,
-                                 device_particle_indices, particle_radius, num_particles, device_particles, width, height, depth, device_out_force, device_out_torque, device_grid);
+    step_kernel<<<grid, block>>>(N, device_center_of_mass, device_quaternion, device_velocity, device_angular_velocity, device_box_min,
+                                 device_box_max, device_box_all, device_particle_indices, device_particle_owners, particle_radius,
+                                 num_particles, device_particles, width, height, depth, device_out_force, device_out_torque, device_grid);
 
     cudaDeviceSynchronize();
 
