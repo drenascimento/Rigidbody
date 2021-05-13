@@ -68,10 +68,15 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
                             float* box_min, float* box_max, float *box_all, int *particle_indices, int *particle_owners, float particle_radius,
                             int num_particles, float *particles, int width, int height, int depth, float *out_force, float *out_torque, int *grid) {
 
+    const int blockId = blockIdx.x + blockIdx.y * gridDim.x + gridDim.x * gridDim.y * blockIdx.z;
+    const int threadIndex = blockId * (blockDim.x * blockDim.y * blockDim.z)
+        + (threadIdx.z * (blockDim.x * blockDim.y))
+        + (threadIdx.y * blockDim.x) + threadIdx.x;
+
     const int idx = threadIdx.x + blockDim.x * blockIdx.x;
     const int idy = threadIdx.y + blockDim.y * blockIdx.y;
     const int idz = threadIdx.z + blockDim.z * blockIdx.z;
-    const int threadIndex = threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y;
+    //const int threadIndex = threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y;
 
     /* Clean grid */
 
@@ -155,10 +160,11 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
         }
 
         /* Debugging - DELETE */
-        if (!(threadIndex == N-1 && i == num_particles) || (i == particle_indices[threadIndex+1])){
-            printf("violation!\n");
-            printf("threadIndex: %d, N is %d, i is %d, num_particles %d, particle_indices[threadIndex+1] is %d.\n", threadIndex, N, i, num_particles, particle_indices[threadIndex + 1]);
-        }
+        //if (!((threadIndex == N-1 && i == num_particles) || (i == particle_indices[threadIndex+1]))){
+        //    //threadIndex: 0, N is 2, i is 1, num_particles 126, particle_indices[threadIndex+1] is 1.
+        //    printf("violation!\n");
+        //    printf("threadIndex: %d, N is %d, i is %d, num_particles %d, particle_indices[threadIndex+1] is %d.\n", threadIndex, N, i, num_particles, particle_indices[threadIndex + 1]);
+        //}
         /* Debugging - DELETE */
     }
 
@@ -180,7 +186,7 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
         for (int zp = z-1; zp <= z+1; zp++) {
             if (xp < 0 || xp >= width || yp < 0 || yp >= height || zp < 0 || zp >= depth) continue;
 
-            size_t neighbor_index = (xp + yp * width + zp * width * height) * MAX_PARTICLES_IN_CELL;
+            size_t neighbor_index = (xp * height * depth + yp * depth + zp) * MAX_PARTICLES_IN_CELL;
 
             for (size_t neighbor_offset = 0; neighbor_offset < MAX_PARTICLES_IN_CELL && grid[neighbor_index + neighbor_offset] != 0; neighbor_offset++) {
 
@@ -208,8 +214,7 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
                 float3 Fid = real_damping_coefficient * rel_vel_other;
                 float3 Fit = real_shear_coefficient * rel_tangential_vel;
 
-                // Write updates to out_force and out_torque. For this we will need synchronization primitives
-
+                // Write updates to out_force and out_torque
                 float3 center_of_mass_owner = *((float3 *)center_of_mass + 3 * particle_owners[grid[index + offset]]);
                 float3 rel_pos_to_center = my_particle_pos - center_of_mass_owner;
 
