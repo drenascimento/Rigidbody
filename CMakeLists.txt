@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.16)
 #define cuda arch
 
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CMAKE_CUDA_ARCHITECTURES 75)
+  set(CMAKE_CUDA_ARCHITECTURES 52 60 61 75)
 endif()
 
 # define project

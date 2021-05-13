@@ -1,6 +1,8 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <stdio.h>
+#include <iostream>
+#include "kernels.h"
 
 #define MAX_PARTICLES_IN_CELL 3
 //#define SCAN_BLOCK_DIM 1024
@@ -73,20 +75,23 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
 
     /* Clean grid */
 
-    grid[threadIndex] = 0;
+    for (int offset=0; offset<MAX_PARTICLES_IN_CELL; offset++) {
+        grid[threadIndex * MAX_PARTICLES_IN_CELL + offset] = 0;
+    }
+
     __syncthreads();
 
     /* All threads < N are each responsible for 1 rigidbody. */
 
     if (threadIndex < N) {
         // Generate particles and store in local array
-        float min_x = box_min[N * 3    ];
-        float min_y = box_min[N * 3 + 1];
-        float min_z = box_min[N * 3 + 2];
+        float min_x = box_min[threadIndex * 3    ];
+        float min_y = box_min[threadIndex * 3 + 1];
+        float min_z = box_min[threadIndex * 3 + 2];
 
-        float max_x = box_max[N * 3    ];
-        float max_y = box_max[N * 3 + 1];
-        float max_z = box_max[N * 3 + 2];
+        float max_x = box_max[threadIndex * 3    ];
+        float max_y = box_max[threadIndex * 3 + 1];
+        float max_z = box_max[threadIndex * 3 + 2];
 
         const float r = particle_radius;
         const float start_x = - (max_x - min_x) / 2;
@@ -144,12 +149,15 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
         }}}
 
         /* Clean out_force and out_torque */
-        out_force[threadIndex] = 0;
-        out_torque[threadIndex] = 0;
+        for (int offset = 0; offset < 3; offset++) {
+            out_force[threadIndex * 3 + offset] = 0;
+            out_torque[threadIndex * 3 + offset] = 0;
+        }
 
         /* Debugging - DELETE */
         if (!(threadIndex == N-1 && i == num_particles) || (i == particle_indices[threadIndex+1])){
             printf("violation!\n");
+            printf("threadIndex: %d, N is %d, i is %d, num_particles %d, particle_indices[threadIndex+1] is %d.\n", threadIndex, N, i, num_particles, particle_indices[threadIndex + 1]);
         }
         /* Debugging - DELETE */
     }
@@ -158,10 +166,12 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
 
     /* Collision detection and reaction - write to out_force and out_torque */
 
-    int index = threadIndex;
+    int index = threadIndex *  MAX_PARTICLES_IN_CELL;
     int x = idx;
     int y = idy;
     int z = idz;
+
+    if (x >= width || y >= height || z >= depth) return;
 
     for (size_t offset = 0; offset < MAX_PARTICLES_IN_CELL && grid[index + offset] != 0; offset++) {
         // Get all points in a 3x3 block around (x,y,z)
@@ -170,7 +180,7 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
         for (int zp = z-1; zp <= z+1; zp++) {
             if (xp < 0 || xp >= width || yp < 0 || yp >= height || zp < 0 || zp >= depth) continue;
 
-            size_t neighbor_index = (xp * height * depth + yp * depth + zp) * MAX_PARTICLES_IN_CELL;
+            size_t neighbor_index = (xp + yp * width + zp * width * height) * MAX_PARTICLES_IN_CELL;
 
             for (size_t neighbor_offset = 0; neighbor_offset < MAX_PARTICLES_IN_CELL && grid[neighbor_index + neighbor_offset] != 0; neighbor_offset++) {
 
@@ -182,6 +192,8 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
                 float3 neighbor_particle_velocity = *((float3*)particles + 6 * (grid[neighbor_index + neighbor_offset]) + 3);
 
                 if (particle_owners[grid[index + offset]] == particle_owners[grid[neighbor_index + neighbor_offset]]) continue;
+
+                //printf("Found collision between particles %d and %d, from bodies %d and %d, respectively\n", grid[index + offset], grid[neighbor_index + neighbor_offset], particle_owners[grid[index + offset]], particle_owners[grid[neighbor_index + neighbor_offset]]);
 
                 float real_spring_coefficient = 0.5f;
                 float real_shear_coefficient = 0.5f;
@@ -204,13 +216,13 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
                 float3 total_force = Fis + Fid + Fit;
                 float3 total_torque = cross(rel_pos_to_center, total_force);
 
-                atomicAdd(out_force + 3 * (particle_owners[grid[index + offset]]    ), total_force.x);
-                atomicAdd(out_force + 3 * (particle_owners[grid[index + offset]] + 1), total_force.y);
-                atomicAdd(out_force + 3 * (particle_owners[grid[index + offset]] + 2), total_force.z);
+                atomicAdd(out_force + 3 * particle_owners[grid[index + offset]]    , total_force.x);
+                atomicAdd(out_force + 3 * particle_owners[grid[index + offset]] + 1, total_force.y);
+                atomicAdd(out_force + 3 * particle_owners[grid[index + offset]] + 2, total_force.z);
 
-                atomicAdd(out_torque + 3 * (particle_owners[grid[index + offset]]    ), total_torque.x);
-                atomicAdd(out_torque + 3 * (particle_owners[grid[index + offset]] + 1), total_torque.y);
-                atomicAdd(out_torque + 3 * (particle_owners[grid[index + offset]] + 2), total_torque.z);
+                atomicAdd(out_torque + 3 * particle_owners[grid[index + offset]]    , total_torque.x);
+                atomicAdd(out_torque + 3 * particle_owners[grid[index + offset]] + 1, total_torque.y);
+                atomicAdd(out_torque + 3 * particle_owners[grid[index + offset]] + 2, total_torque.z);
             }
         }}}
     }
@@ -227,35 +239,38 @@ __global__ void step_kernel(int N, float *center_of_mass, float *quaternion, flo
  * Out:
  * outForce, size N
  * outTorque, size N */
-void
-update(int N, float particle_radius, float *center_of_mass, float *quaternion, float *velocity, float* angular_velocity,
-       float* box_min, float* box_max, float *box_all, float *out_force, float *out_torque) {
+void Kernels::update(int N, float particle_radius, float *center_of_mass, float *quaternion, float *velocity,
+                     float* angular_velocity, float* box_min, float* box_max, float *box_all, float *out_force, float *out_torque) {
 
     // compute number of blocks and threads per block
-    int width  = ceilf((box_all[3] - box_all[0]) / (2.f * particle_radius));
-    int height = ceilf((box_all[4] - box_all[1]) / (2.f * particle_radius));
-    int depth  = ceilf((box_all[5] - box_all[2]) / (2.f * particle_radius));
+    uint width  = ceil((box_all[3] - box_all[0]) / (2.f * particle_radius));
+    uint height = ceil((box_all[4] - box_all[1]) / (2.f * particle_radius));
+    uint depth  = ceil((box_all[5] - box_all[2]) / (2.f * particle_radius));
 
-    const int block_x = 16;
+    //std::cout << "width: " << width << " height " << height << " depth " << depth << "\n";
+
+    const int block_x = 8;
     const int block_y = 8;
     const int block_z = 8;
 
     dim3 block(block_x, block_y, block_z);
     dim3 grid((width + block_x - 1) / block_x, (height + block_y - 1) / block_y, (depth + block_z - 1) / block_z);
 
+    //std::cout << "grid: " << (width + block_x - 1) / block_x << " " << (height + block_y - 1) / block_y << " " << (depth + block_z - 1) / block_z << "\n";
+
     int particle_indices[N];
     int num_particles = 0;
-    particle_indices[0] = 0;
+    particle_indices[0] = 1; // Start with since particles are 1-indexed
 
     for (int i=0; i<N; i++) {
         // Get particle count of ith rigid body
-        float min_x = box_min[N * 3    ];
-        float min_y = box_min[N * 3 + 1];
-        float min_z = box_min[N * 3 + 2];
+        float min_x = box_min[i * 3    ];
+        float min_y = box_min[i * 3 + 1];
+        float min_z = box_min[i * 3 + 2];
 
-        float max_x = box_max[N * 3    ];
-        float max_y = box_max[N * 3 + 1];
-        float max_z = box_max[N * 3 + 2];
+        float max_x = box_max[i * 3    ];
+        float max_y = box_max[i * 3 + 1];
+        float max_z = box_max[i * 3 + 2];
 
         const float r = particle_radius;
         const float start_x = - (max_x - min_x) / 2;
@@ -265,19 +280,18 @@ update(int N, float particle_radius, float *center_of_mass, float *quaternion, f
         const float start_z = - (max_z - min_z) / 2;
         const float end_z = -start_z;
 
-        int num_particles_x = floor((end_x - r) - (start_x + r)) / (2*r) + 1;
-        int num_particles_y = floor((end_y - r) - (start_y + r)) / (2*r) + 1;
-        int num_particles_z = floor((end_z - r) - (start_z + r)) / (2*r) + 1;
+        int num_particles_x = floor((max_x - min_x) / (2*r));
+        int num_particles_y = floor((max_y - min_y) / (2*r));
+        int num_particles_z = floor((max_z - min_z) / (2*r));
 
         if (i == N-1) {
+            //printf("numParticles: x %d, y %d, z %d ", num_particles_x, num_particles_y, num_particles_z);
             num_particles = num_particles_x * num_particles_y * num_particles_z + particle_indices[i];
+            //printf(",thus num_particles is %d\n", num_particles);
         } else {
             particle_indices[i+1] = num_particles_x * num_particles_y * num_particles_z + particle_indices[i];
         }
     }
-
-    //const int threadsPerBlock = 512;
-    //const int blocks = (N + threadsPerBlock - 1) / threadsPerBlock;
 
     float* device_center_of_mass;
     float* device_quaternion;
@@ -304,36 +318,40 @@ update(int N, float particle_radius, float *center_of_mass, float *quaternion, f
     cudaMalloc((void **) &device_particles, num_particles * 6 * sizeof(float));
     cudaMalloc((void **) &device_out_force, N * 3 * sizeof(float));
     cudaMalloc((void **) &device_out_torque, N * 3 * sizeof(float));
-    cudaMalloc((void **) &device_grid, width * height * depth * 3 * sizeof(int));
+    cudaMalloc((void **) &device_grid, width * height * depth * MAX_PARTICLES_IN_CELL * sizeof(int));
     cudaMalloc((void **) &device_particle_owners, num_particles * sizeof(int));
 
     cudaMemcpy(device_center_of_mass, center_of_mass, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(device_quaternion, quaternion, N * 4 * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_velocity, velocity, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_angular_velocity, angular_velocity, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(device_box_min, box_min, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(device_box_max, box_max, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(device_box_all, box_all, 6 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(device_particle_indices, particle_indices, N * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_velocity, velocity, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_angular_velocity, angular_velocity, N * 3 * sizeof(float), cudaMemcpyHostToDevice);
 
     step_kernel<<<grid, block>>>(N, device_center_of_mass, device_quaternion, device_velocity, device_angular_velocity, device_box_min,
                                  device_box_max, device_box_all, device_particle_indices, device_particle_owners, particle_radius,
                                  num_particles, device_particles, width, height, depth, device_out_force, device_out_torque, device_grid);
 
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) printf("Error: %s\n", cudaGetErrorString(err));
     cudaDeviceSynchronize();
 
-    cudaMemcpy(out_force, device_out_force, N * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(out_torque, device_out_torque, N * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(out_force, device_out_force, N * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(out_torque, device_out_torque, N * 3 * sizeof(float), cudaMemcpyDeviceToHost);
 
     cudaFree(device_center_of_mass);
     cudaFree(device_quaternion);
     cudaFree(device_box_min);
     cudaFree(device_box_max);
+    cudaFree(device_box_all);
     cudaFree(device_velocity);
     cudaFree(device_angular_velocity);
     cudaFree(device_particles);
     cudaFree(device_particle_indices);
     cudaFree(device_out_force);
     cudaFree(device_out_torque);
-    cudaFree(device_grid)
+    cudaFree(device_grid);
+    cudaFree(device_particle_owners);
 }

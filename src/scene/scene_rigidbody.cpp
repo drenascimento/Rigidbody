@@ -2,6 +2,7 @@
 #include "../platform/gl.h"
 #include "renderer.h"
 #include "scene_rigidbody.h"
+#include "kernels.h"
 
 #include <algorithm>
 #include <cmath>
@@ -44,111 +45,84 @@ void Scene_Rigidbody::step(float dt) {
 
 void Scene_Rigidbody::partial_step(float dt) {
     BBox bounds;
-    /* 1st step: Compute particle values */
-    // Position, velocity, relative position
+
     for_rigidbody([&bounds](Rigidbody& body){
         bounds.enclose(body.bbox());
-        for (Rigidbody::Rigidbody_Particle& p : body.particles()) {
-            p.update(body.center_of_mass, body.quaternion, body.velocity(), body.angular_velocity());
-        }
     });
 
-    /* 2nd step: Generate grid, and place particles on grid */
-    int width  = ceilf((bounds.max.x - bounds.min.x) / (2.f * particle_radius));
-    int height = ceilf((bounds.max.y - bounds.min.y) / (2.f * particle_radius));
-    int depth  = ceilf((bounds.max.z - bounds.min.z) / (2.f * particle_radius));
+    /* 2nd and 3rd steps: Use kernel for collision detection and reaction */
+    int N = bodies.size();
+    float *center_of_mass   = (float*)malloc(N * 3 * sizeof(float));
+    float *quaternion       = (float*)malloc(N * 4 * sizeof(float));
+    float *velocity         = (float*)malloc(N * 3 * sizeof(float));
+    float *angular_velocity = (float*)malloc(N * 3 * sizeof(float));
+    float *box_min          = (float*)malloc(N * 3 * sizeof(float));
+    float *box_max          = (float*)malloc(N * 3 * sizeof(float));
+    float *box_all          = (float*)malloc(6 * sizeof(float));
 
-    std::vector<uint32_t> grid;
-    grid.resize(width * height * depth * max_particles_in_voxel, 0);
-    for (size_t i = 0; i < grid.size(); i++) grid[i] = 0;
+    float *out_force        = (float*)malloc(N * 3 * sizeof(float));
+    float *out_torque       = (float*)malloc(N * 3 * sizeof(float));
 
-    /* NOTE: Particles in grid are 1-indexed, 0 index indicates grid is empty at that location. */
-    std::vector<Rigidbody::Rigidbody_Particle*> particles;
-    particles.push_back({});
+    for (size_t i=0; i < bodies.size(); i++) {
+        Rigidbody& r = bodies[i];
 
-    {
-        size_t particle_index = 0;
+        center_of_mass[i * 3    ] = r.center_of_mass.x;
+        center_of_mass[i * 3 + 1] = r.center_of_mass.y;
+        center_of_mass[i * 3 + 2] = r.center_of_mass.z;
 
-        for (size_t i=0; i < bodies.size(); i++) {
-            Rigidbody& r = bodies[i];
+        quaternion[i * 4    ] = r.quaternion.x;
+        quaternion[i * 4 + 1] = r.quaternion.y;
+        quaternion[i * 4 + 2] = r.quaternion.z;
+        quaternion[i * 4 + 3] = r.quaternion.w;
 
-            for (Rigidbody::Rigidbody_Particle& p : r.particles()) {
-                particle_index++;
-                particles.push_back(&p);
+        velocity[i * 3    ] = r.velocity().x;
+        velocity[i * 3 + 1] = r.velocity().y;
+        velocity[i * 3 + 2] = r.velocity().z;
 
-                size_t x, y, z;
-                x = floorf((p.pos.x - bounds.min.x) / (2.f * particle_radius));
-                y = floorf((p.pos.y - bounds.min.y) / (2.f * particle_radius));
-                z = floorf((p.pos.z - bounds.min.z) / (2.f * particle_radius));
+        angular_velocity[i * 3    ] = r.angular_velocity().x;
+        angular_velocity[i * 3 + 1] = r.angular_velocity().y;
+        angular_velocity[i * 3 + 2] = r.angular_velocity().z;
 
-                size_t index = (x * height * depth + y * depth + z) * max_particles_in_voxel;
-                size_t offset = 0;
+        box_min[i * 3    ] = r.bbox().min.x;
+        box_min[i * 3 + 1] = r.bbox().min.y;
+        box_min[i * 3 + 2] = r.bbox().min.z;
 
-                // In the *very rare* case of overflow, just ignore additional particles
-                if (offset < max_particles_in_voxel) {
-                    grid[index + offset] = particle_index;
-                } else {
-                    std::cout << "Dropped particle\n";
-                }
-            }
-        }
+        box_max[i * 3    ] = r.bbox().max.x;
+        box_max[i * 3 + 1] = r.bbox().max.y;
+        box_max[i * 3 + 2] = r.bbox().max.z;
+
+        box_all[0] = bounds.min.x;
+        box_all[1] = bounds.min.y;
+        box_all[2] = bounds.min.z;
+
+        box_all[3] = bounds.max.x;
+        box_all[4] = bounds.max.y;
+        box_all[5] = bounds.max.z;
     }
 
-    /* 3rd step: Get collisions */
-    for (int x = 0; x < width; x++) {
-    for (int y = 0; y < height; y++) {
-    for (int z = 0; z < depth; z++) {
+    Kernels::update(N, particle_radius, center_of_mass, quaternion, velocity,
+                    angular_velocity, box_min, box_max, box_all, out_force, out_torque);
 
-        size_t index = (x * height * depth + y * depth + z) * max_particles_in_voxel;
+    for (size_t i=0; i < bodies.size(); i++) {
+        Rigidbody& r = bodies[i];
 
-        for (size_t offset = 0; offset < max_particles_in_voxel && grid[index + offset] != 0; offset++) {
-            // Get all points in a 3x3 block around (x,y,z)
-            for (int xp = x-1; xp <= x+1; xp++) {
-            for (int yp = y-1; yp <= y+1; yp++) {
-            for (int zp = z-1; zp <= z+1; zp++) {
-                if (xp < 0 || xp >= width || yp < 0 || yp >= height || zp < 0 || zp >= depth) continue;
+        Vec3 force;
+        force.x = out_force[i * 3    ];
+        force.y = out_force[i * 3 + 1];
+        force.z = out_force[i * 3 + 2];
 
-                size_t neighbor_index = (xp * height * depth + yp * depth + zp) * max_particles_in_voxel;
+        //std::cout << "Force update: " << force << "\n";
 
-                for (size_t neighbor_offset = 0; neighbor_offset < max_particles_in_voxel && grid[neighbor_index + neighbor_offset] != 0; neighbor_offset++) {
+        Vec3 torque;
+        torque.x = out_torque[i * 3    ];
+        torque.y = out_torque[i * 3 + 1];
+        torque.z = out_torque[i * 3 + 2];
 
-                    /* Possibly found a pair of colliding particles! Update my body only. */
-                    Rigidbody::Rigidbody_Particle *my_particle = particles[grid[index + offset]];
-                    Rigidbody::Rigidbody_Particle *neighbor_particle = particles[grid[neighbor_index + neighbor_offset]];
+        //std::cout << "Torque update: " << torque << "\n";
 
-                    if (my_particle->owner_index == neighbor_particle->owner_index) continue;
-
-                    //if ((my_particle->pos - neighbor_particle->pos).norm() > 2.f * particle_radius) continue;
-
-                    float real_spring_coefficient = spring_coefficient;
-                    float real_shear_coefficient = shear_coefficient;
-                    float real_damping_coefficient = damping_coefficient;
-
-                    if (bodies[neighbor_particle->owner_index].is_static) {
-                        real_spring_coefficient = 1.f;
-                        real_shear_coefficient = 1.f;
-                        real_damping_coefficient = 1.f;
-                    }
-
-                    // TODO: Figure out if equations are all correct here
-                    // We want the relative pos/vel of neighbor with respect to ourselves
-                    Vec3 rel_pos_other = neighbor_particle->pos - my_particle->pos;
-                    Vec3 rel_vel_other = neighbor_particle->velocity - my_particle->velocity;
-                    Vec3 rel_tangential_vel = rel_vel_other - (dot(rel_vel_other,rel_pos_other.unit()) * rel_pos_other.unit());
-
-                    Vec3 Fis = -real_spring_coefficient * std::abs(2.f * particle_radius - rel_pos_other.norm()) * rel_pos_other.unit();
-                    Vec3 Fid = real_damping_coefficient * rel_vel_other;
-                    Vec3 Fit = real_shear_coefficient * rel_tangential_vel;
-
-                    // Apply update to my body
-                    Vec3 rel_pos_to_center = bodies[my_particle->owner_index].quaternion.rotate(my_particle->rel_pos);
-                    bodies[my_particle->owner_index].accumulate_force((Fis + Fid + Fit) * bodies[my_particle->owner_index].mass());
-                    bodies[my_particle->owner_index].accumulate_torque(cross(rel_pos_to_center, (Fis + Fid + Fit) * bodies[my_particle->owner_index].mass()));
-                }
-            }}}
-        }
-    }}}
-
+        r.accumulate_force(force * r.mass());
+        r.accumulate_torque(torque * r.mass());
+    }
 
     /* 3.5th step: Apply gravity */
     for_rigidbody([](Rigidbody& body){
