@@ -1,4 +1,7 @@
+# Rigidbody
+This is a fork of Scotty3D, which uses its 3D graphics capabilities to display a particle-based 3D rigidbody simulation.
 
+The original README can be seen below:
 # Scotty3D
 
 ![Ubuntu Build Status](https://github.com/CMU-Graphics/Scotty3D/workflows/Ubuntu/badge.svg) ![MacOS Build Status](https://github.com/CMU-Graphics/Scotty3D/workflows/MacOS/badge.svg) ![Windows Build Status](https://github.com/CMU-Graphics/Scotty3D/workflows/Windows/badge.svg)
